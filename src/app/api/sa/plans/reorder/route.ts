@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { getDbPool, initAuthDatabase } from "@/lib/db";
+import { requireSaPermission } from "@/lib/server-permissions";
 
 export const dynamic = "force-dynamic";
 
 export async function PUT(request: Request) {
   try {
+    const auth = await requireSaPermission("plans", "edit");
+    if (!auth.authorized) return auth.response;
+
     await initAuthDatabase();
     const pool = getDbPool();
     const body = await request.json();

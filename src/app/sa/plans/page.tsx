@@ -18,8 +18,11 @@ import {
   AlertTriangle,
   GripVertical,
   ArrowUpDown,
+  Power,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 
 interface Plan {
   id: number;
@@ -34,21 +37,27 @@ interface Plan {
   max_instances: number;
   is_featured: boolean | number;
   sort_order?: number;
+  subscriptions_count?: number;
   active_subscriptions_count?: number;
   created_at: string;
 }
 
 export default function PlansPage() {
+  const { showError, showSuccess } = useFeedbackModal();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("active");
 
   const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [togglingPlanId, setTogglingPlanId] = useState<number | null>(null);
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [planToDelete, setPlanToDelete] = useState<Plan | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [planToChangeStatus, setPlanToChangeStatus] = useState<Plan | null>(null);
 
   const fetchPlans = useCallback(async () => {
     try {
@@ -63,14 +72,14 @@ export default function PlansPage() {
       if (data.success) {
         setPlans(data.plans || []);
       } else {
-        toast.error(data.error || "Erro ao carregar planos");
+        showError(data.error || "Erro ao carregar planos", "Falha ao Carregar");
       }
     } catch {
-      toast.error("Erro de conexão ao buscar planos");
+      showError("Erro de conexão ao buscar planos", "Erro de Conexão");
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, statusFilter]);
+  }, [searchTerm, statusFilter, showError]);
 
   useEffect(() => {
     fetchPlans();
@@ -87,15 +96,15 @@ export default function PlansPage() {
       const data = await res.json();
 
       if (data.success) {
-        toast.success("Plano excluído com sucesso!");
+        showSuccess("Plano excluído com sucesso!", "Plano Excluído");
         setDeleteModalOpen(false);
         setPlanToDelete(null);
         fetchPlans();
       } else {
-        toast.error(data.error || "Erro ao excluir o plano.");
+        showError(data.error || "Erro ao excluir o plano.", "Falha na Exclusão");
       }
     } catch {
-      toast.error("Erro de conexão ao excluir o plano.");
+      showError("Erro de conexão ao excluir o plano.", "Erro de Conexão");
     } finally {
       setIsDeleting(false);
     }
@@ -116,14 +125,48 @@ export default function PlansPage() {
       if (data.success) {
         toast.success("Ordem dos planos salva com sucesso!");
       } else {
-        toast.error(data.error || "Erro ao salvar nova ordenação.");
+        showError(data.error || "Erro ao salvar nova ordenação.", "Falha ao Reordenar");
         fetchPlans();
       }
     } catch {
-      toast.error("Erro de conexão ao reordenar planos.");
+      showError("Erro de conexão ao reordenar planos.", "Erro de Conexão");
       fetchPlans();
     } finally {
       setIsSavingOrder(false);
+    }
+  };
+
+  const handleToggleStatus = async () => {
+    if (!planToChangeStatus) return;
+    const plan = planToChangeStatus;
+    const nextStatus = plan.status === "active" ? "inactive" : "active";
+    try {
+      setTogglingPlanId(plan.id);
+      const res = await fetch(`/api/sa/plans/${plan.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPlans((prev) =>
+          prev.map((p) => (p.id === plan.id ? { ...p, status: nextStatus } : p))
+        );
+        showSuccess(
+          nextStatus === "active"
+            ? `Plano "${plan.name}" ativado com sucesso!`
+            : `Plano "${plan.name}" inativado com sucesso!`,
+          "Status Atualizado"
+        );
+        setStatusModalOpen(false);
+        setPlanToChangeStatus(null);
+      } else {
+        showError(data.error || "Erro ao alterar status do plano.", "Falha ao Atualizar");
+      }
+    } catch {
+      showError("Erro de conexão ao alterar status do plano.", "Erro de Conexão");
+    } finally {
+      setTogglingPlanId(null);
     }
   };
 
@@ -137,26 +180,41 @@ export default function PlansPage() {
   return (
     <div className="space-y-6">
       {/* Header Principal */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-            <Layers className="w-6 h-6" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
+              <Layers className="w-6 h-6 text-indigo-400" />
+              Planos Comerciais
+            </h1>
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
           </div>
-          <div>
-            <h1 className="text-2xl font-black text-white tracking-tight">Planos</h1>
-            <p className="text-sm text-slate-400">
-              Gerencie modelos comerciais, limites de grupos, produtos, envios diários e precificação.
-            </p>
-          </div>
+          <p className="text-xs text-slate-400 mt-1">
+            Gerencie modelos comerciais, limites de grupos, produtos, envios diários e precificação.
+          </p>
         </div>
 
-        <Link
-          href="/sa/plans/new"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/25 transition-all hover:scale-[1.02]"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Novo Plano</span>
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => fetchPlans()}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all focus:outline-none disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${loading ? "animate-spin" : ""}`} />
+            <span className="whitespace-nowrap">Atualizar</span>
+          </button>
+
+          <Link
+            href="/sa/plans/new"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/25 transition-all hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="whitespace-nowrap">Novo Plano</span>
+          </Link>
+        </div>
       </div>
 
       {/* Filtros e Busca */}
@@ -230,6 +288,7 @@ export default function PlansPage() {
           {plans.map((plan) => {
             const isPlanFeatured = Boolean(plan.is_featured);
             const isDragEnabled = !searchTerm && statusFilter === "all";
+            const isInactive = plan.status === "inactive";
 
             return (
               <Reorder.Item
@@ -247,10 +306,12 @@ export default function PlansPage() {
                   stiffness: 350,
                   damping: 25,
                 }}
-                className={`relative flex flex-col justify-between rounded-2xl bg-slate-900/60 border transition-colors p-6 cursor-default ${
-                  isPlanFeatured
-                    ? "border-indigo-500/50 shadow-xl shadow-indigo-950/40 ring-1 ring-indigo-500/20"
-                    : "border-slate-800/80 hover:border-slate-700/80"
+                className={`relative flex flex-col justify-between rounded-2xl border transition-all p-6 cursor-default ${
+                  isInactive
+                    ? "bg-slate-900/30 border-slate-800/40 opacity-60 hover:opacity-85"
+                    : isPlanFeatured
+                    ? "bg-slate-900/60 border-indigo-500/50 shadow-xl shadow-indigo-950/40 ring-1 ring-indigo-500/20"
+                    : "bg-slate-900/60 border-slate-800/80 hover:border-slate-700/80"
                 }`}
               >
                 {isPlanFeatured && (
@@ -346,11 +407,34 @@ export default function PlansPage() {
 
                 {/* Rodapé e Ações */}
                 <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-slate-500 font-medium">
-                    {plan.active_subscriptions_count || 0} empresa{plan.active_subscriptions_count === 1 ? "" : "s"}
-                  </span>
+                  <div className="flex flex-col">
+                    <span className="text-[11px] text-slate-400 font-medium">
+                      {plan.active_subscriptions_count || 0} ativa{Number(plan.active_subscriptions_count) === 1 ? "" : "s"}
+                      {Number(plan.subscriptions_count || 0) > Number(plan.active_subscriptions_count || 0) && (
+                        <span className="text-slate-500 ml-1">
+                          ({plan.subscriptions_count} total)
+                        </span>
+                      )}
+                    </span>
+                  </div>
 
                   <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={togglingPlanId === plan.id}
+                      onClick={() => {
+                        setPlanToChangeStatus(plan);
+                        setStatusModalOpen(true);
+                      }}
+                      className={`p-2 rounded-lg transition-colors ${
+                        plan.status === "active"
+                          ? "text-emerald-400 hover:text-rose-400 hover:bg-rose-500/10"
+                          : "text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10"
+                      } disabled:opacity-50`}
+                      title={plan.status === "active" ? "Inativar Plano" : "Ativar Plano"}
+                    >
+                      <Power className="w-4 h-4" />
+                    </button>
                     <Link
                       href={`/sa/plans/${plan.id}`}
                       className="p-2 rounded-lg text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
@@ -376,6 +460,71 @@ export default function PlansPage() {
         </Reorder.Group>
       )}
 
+      {/* Modal de Confirmação de Mudança de Status */}
+      {statusModalOpen && planToChangeStatus && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div
+                className={`p-2.5 rounded-xl border ${
+                  planToChangeStatus.status === "active"
+                    ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                    : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                }`}
+              >
+                <Power className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-bold text-white">
+                {planToChangeStatus.status === "active" ? "Inativar Plano" : "Ativar Plano"}
+              </h3>
+            </div>
+
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Deseja realmente {planToChangeStatus.status === "active" ? "inativar" : "ativar"} o plano{" "}
+              <strong className="text-white font-bold">{planToChangeStatus.name}</strong>?
+              {planToChangeStatus.status === "active"
+                ? " Planos inativos não ficam visíveis para novas contratações no sistema."
+                : " Planos ativos ficam imediatamente disponíveis para contratação e vinculação de empresas."}
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusModalOpen(false);
+                  setPlanToChangeStatus(null);
+                }}
+                disabled={togglingPlanId !== null}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleStatus}
+                disabled={togglingPlanId !== null}
+                className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition-all shadow-lg flex items-center gap-2 ${
+                  planToChangeStatus.status === "active"
+                    ? "bg-amber-600 hover:bg-amber-500 shadow-amber-600/25"
+                    : "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/25"
+                }`}
+              >
+                {togglingPlanId !== null ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Processando...</span>
+                  </>
+                ) : (
+                  <span>
+                    Confirmar {planToChangeStatus.status === "active" ? "Inativação" : "Ativação"}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Exclusão de Plano */}
       {deleteModalOpen && planToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -390,8 +539,22 @@ export default function PlansPage() {
             <p className="text-sm text-slate-300 leading-relaxed">
               Tem certeza que deseja excluir o plano{" "}
               <strong className="text-white font-bold">{planToDelete.name}</strong>?
-              Esta ação só será permitida se não existirem assinaturas vinculadas a ele.
             </p>
+
+            {Number(planToDelete.subscriptions_count || planToDelete.active_subscriptions_count) > 0 && (
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 space-y-1.5">
+                <p className="font-bold flex items-center gap-1.5 text-amber-400">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                  Este plano possui {planToDelete.subscriptions_count || planToDelete.active_subscriptions_count} assinatura(s) vinculada(s)!
+                </p>
+                <p className="text-amber-300/85 leading-relaxed">
+                  Não é permitida a exclusão deste plano para preservar o histórico e os dados das empresas.
+                  {planToDelete.status === "active"
+                    ? " Você pode inativá-lo para que não receba novas contratações."
+                    : " O plano já se encontra inativo."}
+                </p>
+              </div>
+            )}
 
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
@@ -400,16 +563,36 @@ export default function PlansPage() {
                 disabled={isDeleting}
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
               >
-                Cancelar
+                {Number(planToDelete.subscriptions_count || planToDelete.active_subscriptions_count) > 0 ? "Fechar" : "Cancelar"}
               </button>
-              <button
-                type="button"
-                onClick={handleDeletePlan}
-                disabled={isDeleting}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 transition-all flex items-center gap-2"
-              >
-                {isDeleting ? "Excluindo..." : "Confirmar Exclusão"}
-              </button>
+
+              {Number(planToDelete.subscriptions_count || planToDelete.active_subscriptions_count) > 0 ? (
+                planToDelete.status === "active" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = planToDelete;
+                      setDeleteModalOpen(false);
+                      setPlanToDelete(null);
+                      setPlanToChangeStatus(target);
+                      setStatusModalOpen(true);
+                    }}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-600/30 transition-all flex items-center gap-2"
+                  >
+                    <Power className="w-3.5 h-3.5" />
+                    Inativar Plano
+                  </button>
+                ) : null
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleDeletePlan}
+                  disabled={isDeleting}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 transition-all flex items-center gap-2"
+                >
+                  {isDeleting ? "Excluindo..." : "Confirmar Exclusão"}
+                </button>
+              )}
             </div>
           </div>
         </div>

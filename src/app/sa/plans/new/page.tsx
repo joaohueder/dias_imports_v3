@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, use } from "react";
+import React, { useState, useEffect, useMemo, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -17,6 +17,7 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 import { FloatingActionBar } from "@/components/ui/FloatingActionBar";
 import { maskCurrencyInput, parseCurrencyInput } from "@/lib/formatters";
 
@@ -26,6 +27,7 @@ interface PlanFormPageProps {
 
 export default function PlanFormPage({ params }: PlanFormPageProps) {
   const router = useRouter();
+  const { showError, showSuccess } = useFeedbackModal();
   const resolvedParams = params ? use(params) : undefined;
   const planId = resolvedParams?.id;
   const isEditing = Boolean(planId);
@@ -75,11 +77,11 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
           setFormData(loaded);
           setInitialData(JSON.stringify(loaded));
         } else {
-          toast.error(data.error || "Erro ao carregar dados do plano.");
+          showError(data.error || "Erro ao carregar dados do plano.", "Plano Não Encontrado");
           router.push("/sa/plans");
         }
       } catch {
-        toast.error("Erro ao comunicar com o servidor.");
+        showError("Erro ao comunicar com o servidor.", "Erro de Conexão");
         router.push("/sa/plans");
       } finally {
         setLoading(false);
@@ -87,7 +89,7 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
     }
 
     fetchPlan();
-  }, [isEditing, planId, router]);
+  }, [isEditing, planId, router, showError]);
 
   // Se não estiver editando, inicializa o initialData na primeira renderização
   useEffect(() => {
@@ -149,7 +151,7 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
 
   const handleSave = async () => {
     if (!validate()) {
-      toast.error("Preencha corretamente os campos destacados.");
+      showError("Preencha corretamente os campos destacados no formulário.", "Campos Inválidos");
       return;
     }
 
@@ -173,13 +175,16 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
       const data = await res.json();
 
       if (data.success) {
-        toast.success(isEditing ? "Plano atualizado com sucesso!" : "Plano cadastrado com sucesso!");
+        showSuccess(
+          isEditing ? "Plano atualizado com sucesso!" : "Plano cadastrado com sucesso!",
+          "Salvo com Sucesso"
+        );
         router.push("/sa/plans");
       } else {
-        toast.error(data.error || "Ocorreu um erro ao salvar o plano.");
+        showError(data.error || "Ocorreu um erro ao salvar o plano.", "Falha ao Salvar");
       }
     } catch {
-      toast.error("Erro de conexão ao comunicar com o servidor.");
+      showError("Erro de conexão ao comunicar com o servidor.", "Erro de Conexão");
     } finally {
       setIsSubmitting(false);
     }
@@ -204,6 +209,12 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
       toast.info("Formulário limpo.");
     }
   };
+
+  const isFormInvalid = useMemo(() => {
+    if (!formData.name.trim()) return true;
+    if (errors.name || errors.price || errors.max_groups || errors.max_products || errors.max_messages_day) return true;
+    return false;
+  }, [formData, errors]);
 
   if (loading) {
     return (
@@ -520,6 +531,7 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
       <FloatingActionBar
         isVisible={isDirty}
         isSubmitting={isSubmitting}
+        disabled={isFormInvalid}
         onSave={handleSave}
         onCancel={handleResetForm}
         saveLabel={isEditing ? "Salvar Alterações" : "Criar Plano"}

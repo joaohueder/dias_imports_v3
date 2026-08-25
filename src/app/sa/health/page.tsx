@@ -18,6 +18,7 @@ import {
   Clock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 
 interface HealthData {
   status: string;
@@ -66,6 +67,7 @@ function formatBytes(bytes: number): string {
 }
 
 export default function SaHealthPage() {
+  const { showError } = useFeedbackModal();
   const [data, setData] = useState<HealthData | null>(null);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -82,7 +84,7 @@ export default function SaHealthPage() {
       }
     } catch {
       if (showToast) {
-        toast.error("Falha ao sincronizar métricas em tempo real");
+        showError("Falha ao sincronizar métricas em tempo real com o servidor.", "Falha de Conexão");
       }
     } finally {
       setLoading(false);
@@ -121,22 +123,22 @@ export default function SaHealthPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+            className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               autoRefresh
                 ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
                 : "bg-slate-900 text-slate-400 border-slate-800"
             }`}
           >
-            <Radio className={`w-3.5 h-3.5 ${autoRefresh ? "animate-pulse text-emerald-400" : ""}`} />
-            <span>{autoRefresh ? "Auto Sync (4s)" : "Sync Pausado"}</span>
+            <Radio className={`w-3.5 h-3.5 shrink-0 ${autoRefresh ? "animate-pulse text-emerald-400" : ""}`} />
+            <span className="whitespace-nowrap">{autoRefresh ? "Auto Sync (4s)" : "Sync Pausado"}</span>
           </button>
 
           <button
             onClick={() => fetchHealth(true)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all focus:outline-none"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all focus:outline-none whitespace-nowrap shrink-0 cursor-pointer"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-            <span>Atualizar</span>
+            <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${loading ? "animate-spin" : ""}`} />
+            <span className="whitespace-nowrap">Atualizar</span>
           </button>
         </div>
       </div>
@@ -155,13 +157,13 @@ export default function SaHealthPage() {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black text-white">
-              {data?.database.status === "healthy" ? "Operacional" : "Indisponível"}
+              {data?.database?.status === "healthy" ? "Operacional" : data?.database?.status ? "Degradado" : "Carregando..."}
             </span>
           </div>
           <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
             <span>Latência da Query:</span>
             <span className="font-mono font-bold text-emerald-400">
-              {data?.database.latencyMs ?? 0}ms
+              {data?.database?.latencyMs ?? 0}ms
             </span>
           </div>
         </div>
@@ -178,13 +180,13 @@ export default function SaHealthPage() {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black text-white">
-              {data?.system.cpuCount ?? 0} Núcleos
+              {data?.system?.cpuCount ?? 0} Núcleos
             </span>
           </div>
           <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
             <span>Arquitetura:</span>
             <span className="font-mono text-indigo-300">
-              {data?.system.platform} ({data?.system.arch})
+              {data?.system?.platform ?? "N/A"} ({data?.system?.arch ?? "N/A"})
             </span>
           </div>
         </div>
@@ -201,17 +203,17 @@ export default function SaHealthPage() {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black text-white">
-              {data?.system.memory.usagePercent ?? 0}%
+              {data?.system?.memory?.usagePercent ?? 0}%
             </span>
             <span className="text-xs text-slate-400 font-medium">
-              ({data ? formatBytes(data.system.memory.usedBytes) : "0 GB"} / {data ? formatBytes(data.system.memory.totalBytes) : "0 GB"})
+              ({data?.system?.memory ? formatBytes(data.system.memory.usedBytes) : "0 GB"} / {data?.system?.memory ? formatBytes(data.system.memory.totalBytes) : "0 GB"})
             </span>
           </div>
           {/* Progress bar */}
           <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
             <div
               className="bg-gradient-to-r from-indigo-500 to-violet-500 h-full rounded-full transition-all duration-500"
-              style={{ width: `${data?.system.memory.usagePercent ?? 0}%` }}
+              style={{ width: `${data?.system?.memory?.usagePercent ?? 0}%` }}
             />
           </div>
         </div>
@@ -228,12 +230,12 @@ export default function SaHealthPage() {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black text-white">
-              {data ? formatUptime(data.system.uptimeSeconds) : "0s"}
+              {data?.system ? formatUptime(data.system.uptimeSeconds) : "0s"}
             </span>
           </div>
           <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
             <span>Engine Runtime:</span>
-            <span className="font-mono text-amber-300">Node {data?.system.nodeVersion}</span>
+            <span className="font-mono text-amber-300">Node {data?.system?.nodeVersion ?? ""}</span>
           </div>
         </div>
       </div>
@@ -308,7 +310,7 @@ export default function SaHealthPage() {
             <div className="space-y-1">
               <span className="text-slate-400">Processador Principal</span>
               <p className="text-slate-200 font-mono text-[11px] truncate bg-slate-950 p-2 rounded-lg border border-slate-800/60">
-                {data?.system.cpuModel ?? "Carregando..."}
+                {data?.system?.cpuModel ?? "Carregando..."}
               </p>
             </div>
 

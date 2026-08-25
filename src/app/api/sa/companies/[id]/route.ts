@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getDbPool, initAuthDatabase } from "@/lib/db";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
+import { requireSaPermission } from "@/lib/server-permissions";
+import { deleteEvolutionInstance } from "@/lib/evolution";
 
 export const dynamic = "force-dynamic";
 
@@ -10,16 +12,39 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireSaPermission("companies", "view");
+    if (!auth.authorized) return auth.response;
+
     await initAuthDatabase();
     const { id } = await params;
     const pool = getDbPool();
 
     const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT c.*, COUNT(DISTINCT u.id) as user_count 
+      `SELECT 
+         c.*, 
+         COUNT(DISTINCT u.id) as user_count,
+         COALESCE(sub.plan_snapshot_name, p.name, c.plan) as current_plan_name,
+         sub.status as subscription_status,
+         sub.id as active_subscription_id,
+         COALESCE(sub.plan_snapshot_max_groups, p.max_groups, 0) as quota_max_groups,
+         COALESCE(sub.plan_snapshot_max_products, p.max_products, 0) as quota_max_products,
+         COALESCE(sub.plan_snapshot_max_messages_day, p.max_messages_day, c.max_messages_day) as quota_max_messages_day,
+         COALESCE(sub.plan_snapshot_max_instances, p.max_instances, c.max_instances) as quota_max_instances
        FROM companies c 
        LEFT JOIN users u ON u.company_id = c.id 
+       LEFT JOIN (
+         SELECT s1.*
+         FROM subscriptions s1
+         INNER JOIN (
+           SELECT company_id, MAX(id) as max_id
+           FROM subscriptions
+           WHERE status = 'active'
+           GROUP BY company_id
+         ) s2 ON s1.id = s2.max_id
+       ) sub ON sub.company_id = c.id
+       LEFT JOIN plans p ON sub.plan_id = p.id
        WHERE c.id = ? 
-       GROUP BY c.id`,
+       GROUP BY c.id, sub.id, sub.plan_snapshot_name, sub.status, sub.plan_snapshot_max_groups, sub.plan_snapshot_max_products, sub.plan_snapshot_max_messages_day, sub.plan_snapshot_max_instances, p.name, p.max_groups, p.max_products, p.max_messages_day, p.max_instances`,
       [id]
     );
 
@@ -32,6 +57,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, company: rows[0] });
   } catch (error: unknown) {
+    console.error("Erro na rota /api/sa/companies/[id]:", error);
     const message = error instanceof Error ? error.message : "Erro ao carregar empresa";
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
@@ -42,7 +68,8 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
+  try {    const auth = await requireSaPermission("companies", "edit");
+    if (!auth.authorized) return auth.response;
     await initAuthDatabase();
     const { id } = await params;
     const pool = getDbPool();
@@ -228,11 +255,36 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireSaPermission("companies", "delete");
+    if (!auth.authorized) return auth.response;
+
     const { id } = await params;
     const pool = getDbPool();
 
     // Desassociar ou checar usuários vinculados
     await pool.query("UPDATE users SET company_id = NULL WHERE company_id = ?", [id]);
+
+    // Buscar e remover instâncias WhatsApp associadas (tanto na Evolution API quanto no banco de dados)
+    try {
+      const [instances] = await pool.query<RowDataPacket[]>(
+        "SELECT id, name FROM instances WHERE company_id = ?",
+        [id]
+      );
+
+      for (const inst of instances) {
+        if (inst.name) {
+          try {
+            await deleteEvolutionInstance(inst.name);
+          } catch (evoErr) {
+            console.warn(`Aviso: Erro ao deletar instância ${inst.name} na Evolution API:`, evoErr);
+          }
+        }
+      }
+
+      await pool.query("DELETE FROM instances WHERE company_id = ?", [id]);
+    } catch (instErr) {
+      console.warn("Aviso ao remover instâncias da empresa:", instErr);
+    }
 
     const [result] = await pool.query<ResultSetHeader>(
       "DELETE FROM companies WHERE id = ?",

@@ -77,7 +77,8 @@ export async function initAuthDatabase(): Promise<void> {
       password VARCHAR(255) NOT NULL,
       otp_code VARCHAR(10) NULL,
       otp_expires_at DATETIME NULL,
-      role ENUM('SUPER_ADMIN', 'COMPANY_ADMIN', 'USER') NOT NULL DEFAULT 'COMPANY_ADMIN',
+      role ENUM('SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'USER') NOT NULL DEFAULT 'ADMIN',
+      permissions JSON NULL,
       company_id INT NULL,
       status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -112,6 +113,13 @@ export async function initAuthDatabase(): Promise<void> {
       id INT AUTO_INCREMENT PRIMARY KEY,
       company_id INT NOT NULL,
       plan_id INT NOT NULL,
+      plan_snapshot_name VARCHAR(100) NULL,
+      plan_snapshot_max_groups INT NULL DEFAULT 0,
+      plan_snapshot_max_products INT NULL DEFAULT 0,
+      plan_snapshot_max_messages_day INT NULL DEFAULT 0,
+      plan_snapshot_max_instances INT NULL DEFAULT 1,
+      plan_snapshot_billing_cycle VARCHAR(50) NULL DEFAULT 'monthly',
+      plan_snapshot_features JSON NULL,
       status ENUM('active', 'trialing', 'past_due', 'canceled', 'expired') NOT NULL DEFAULT 'active',
       current_period_start DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       current_period_end DATETIME NOT NULL,
@@ -120,6 +128,33 @@ export async function initAuthDatabase(): Promise<void> {
       price_at_subscription DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  // Cria tabela de instâncias se não existir
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS instances (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      company_id INT NOT NULL,
+      name VARCHAR(150) NOT NULL,
+      whatsapp_number VARCHAR(50) NULL,
+      server_url VARCHAR(255) NULL,
+      api_key VARCHAR(255) NULL,
+      instance_key VARCHAR(255) NOT NULL UNIQUE,
+      status ENUM('connected', 'connecting', 'disconnected', 'banned', 'qrcode') NOT NULL DEFAULT 'disconnected',
+      qrcode_base64 LONGTEXT NULL,
+      phone_connected VARCHAR(50) NULL,
+      profile_name VARCHAR(150) NULL,
+      profile_picture_url TEXT NULL,
+      battery_level INT NULL,
+      is_charging BOOLEAN NULL DEFAULT FALSE,
+      total_messages_sent INT NOT NULL DEFAULT 0,
+      total_messages_received INT NOT NULL DEFAULT 0,
+      last_activity_at DATETIME NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_company_id (company_id),
+      INDEX idx_status (status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 

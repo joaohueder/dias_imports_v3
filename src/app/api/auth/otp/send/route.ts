@@ -90,11 +90,13 @@ export async function POST(request: Request) {
     // Em produção integrará com o disparador WhatsApp; em dev/simulação logamos e retornamos código
     console.log(`[OTP WHATSAPP] Enviando código ${otpCode} para o número ${cleanWhatsapp} (Usuário: ${user.name})`);
 
+    const isDevelopment = process.env.NODE_ENV !== "production";
+
     return NextResponse.json({
       success: true,
       message: "Código de verificação OTP enviado via WhatsApp com sucesso!",
-      // Exibimos em dev para conveniência e testes imediatos
-      devOtpPreview: otpCode,
+      // Exibimos estritamente em ambiente de desenvolvimento local
+      ...(isDevelopment ? { devOtpPreview: otpCode } : {}),
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Erro ao processar solicitação de OTP";

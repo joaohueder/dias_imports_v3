@@ -43,6 +43,14 @@ export function maskZipcode(value: string): string {
   return digits.replace(/(\d{5})(\d)/, "$1-$2");
 }
 
+export function formatDocumentWithLabel(value: string | null | undefined): string {
+  if (!value) return "";
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  const masked = maskCpfCnpj(digits);
+  return digits.length <= 11 ? `CPF: ${masked}` : `CNPJ: ${masked}`;
+}
+
 // --- VALIDAÇÕES ---
 
 export function validateEmail(email: string): boolean {

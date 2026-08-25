@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDbPool, initAuthDatabase } from "@/lib/db";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
+import { requireSaPermission } from "@/lib/server-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireSaPermission("plans", "view");
+    if (!auth.authorized) return auth.response;
+
     await initAuthDatabase();
     const pool = getDbPool();
     const { id } = await params;
@@ -43,6 +47,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireSaPermission("plans", "edit");
+    if (!auth.authorized) return auth.response;
+
     await initAuthDatabase();
     const pool = getDbPool();
     const { id } = await params;
@@ -127,6 +134,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireSaPermission("plans", "delete");
+    if (!auth.authorized) return auth.response;
+
     await initAuthDatabase();
     const pool = getDbPool();
     const { id } = await params;

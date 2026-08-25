@@ -37,6 +37,6 @@ O painel `/sa` (Super Admin) foi estruturado seguindo as diretrizes de governan�
 
 ## 2. Arquivos Criados / Modificados
 
-- [src/components/sa/SaLayoutClient.tsx](src/components/sa/SaLayoutClient.tsx) - Componente cliente de casca completa com header fixo, sidebar retrátil/responsivo, main e footer fixo.
+- [src/components/sa/SaLayoutClient.tsx](src/components/sa/SaLayoutClient.tsx) - Componente cliente de casca completa com header fixo, sidebar retrátil/responsivo, main e footer fixo. Ignora a renderização do sidebar/header quando na rota `/sa/login` para isolamento total da tela de login após logoff.
 - [src/app/sa/layout.tsx](src/app/sa/layout.tsx) - Layout Server Component de Next.js integrando o painel `/sa`.
 - [src/app/sa/page.tsx](src/app/sa/page.tsx) - Dashboard inicial com métricas de tenants, banco de dados, instâncias e status de serviços.

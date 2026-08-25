@@ -24,9 +24,12 @@ import {
   ArrowUpDown,
   ShieldCheck,
   Check,
-  X
+  X,
+  Package,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useFeedbackModal } from "@/components/ui/FeedbackModal";
+import { maskPhone } from "@/lib/validators";
 
 interface Company {
   id: number;
@@ -36,6 +39,13 @@ interface Company {
   email: string | null;
   phone: string | null;
   plan: string;
+  current_plan_name?: string;
+  subscription_status?: "active" | "past_due" | "canceled" | "expired" | null;
+  active_subscription_id?: number | null;
+  quota_max_groups?: number;
+  quota_max_products?: number;
+  quota_max_messages_day?: number;
+  quota_max_instances?: number;
   status: "active" | "inactive" | "suspended";
   max_instances: number;
   max_messages_day: number;
@@ -46,6 +56,7 @@ interface Company {
 }
 
 export default function CompaniesPage() {
+  const { showError, showSuccess } = useFeedbackModal();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -60,6 +71,12 @@ export default function CompaniesPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Modal de Mudança de Status
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [companyToChangeStatus, setCompanyToChangeStatus] = useState<Company | null>(null);
+  const [newStatus, setNewStatus] = useState<"active" | "inactive" | "suspended">("active");
+  const [isChangingStatus, setIsChangingStatus] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -91,14 +108,14 @@ export default function CompaniesPage() {
       if (data.success) {
         setCompanies(data.companies || []);
       } else {
-        toast.error(data.error || "Erro ao carregar empresas");
+        showError(data.error || "Erro ao carregar empresas", "Falha ao Carregar");
       }
     } catch {
-      toast.error("Erro de conexão ao buscar empresas");
+      showError("Erro de conexão ao buscar empresas", "Erro de Conexão");
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, statusFilter]);
+  }, [searchTerm, statusFilter, showError]);
 
   useEffect(() => {
     const delayDebounce = setTimeout(() => {
@@ -152,7 +169,7 @@ export default function CompaniesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
-      toast.error("A Razão Social / Nome da Empresa é obrigatório.");
+      showError("A Razão Social / Nome da Empresa é obrigatório.", "Campo Obrigatório");
       return;
     }
 
@@ -174,18 +191,19 @@ export default function CompaniesPage() {
       const data = await res.json();
 
       if (data.success) {
-        toast.success(
+        showSuccess(
           modalMode === "create"
             ? "Empresa criada com sucesso!"
-            : "Empresa atualizada com sucesso!"
+            : "Empresa atualizada com sucesso!",
+          "Sucesso"
         );
         setModalOpen(false);
         fetchCompanies();
       } else {
-        toast.error(data.error || "Ocorreu um erro ao salvar.");
+        showError(data.error || "Ocorreu um erro ao salvar.", "Falha ao Salvar");
       }
     } catch {
-      toast.error("Erro de conexão ao salvar empresa.");
+      showError("Erro de conexão ao salvar empresa.", "Erro de Conexão");
     } finally {
       setIsSubmitting(false);
     }
@@ -202,41 +220,81 @@ export default function CompaniesPage() {
       const data = await res.json();
 
       if (data.success) {
-        toast.success(`Empresa "${companyToDelete.name}" excluída.`);
+        showSuccess(`Empresa "${companyToDelete.name}" excluída.`, "Exclusão Concluída");
         setDeleteModalOpen(false);
         setCompanyToDelete(null);
         fetchCompanies();
       } else {
-        toast.error(data.error || "Erro ao excluir empresa.");
+        showError(data.error || "Erro ao excluir empresa.", "Falha na Exclusão");
       }
     } catch {
-      toast.error("Falha ao comunicar com o servidor.");
+      showError("Falha ao comunicar com o servidor.", "Erro de Conexão");
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // Abrir Modal de Status
+  const handleOpenStatusModal = (company: Company) => {
+    setCompanyToChangeStatus(company);
+    setNewStatus(company.status);
+    setStatusModalOpen(true);
+  };
+
+  // Confirmar Mudança de Status
+  const handleConfirmChangeStatus = async () => {
+    if (!companyToChangeStatus) return;
+
+    try {
+      setIsChangingStatus(true);
+      const res = await fetch(`/api/sa/companies/${companyToChangeStatus.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showSuccess(`Status da empresa "${companyToChangeStatus.name}" atualizado com sucesso!`, "Status Atualizado");
+        setStatusModalOpen(false);
+        setCompanyToChangeStatus(null);
+        fetchCompanies();
+      } else {
+        showError(data.error || "Erro ao atualizar status da empresa.", "Falha ao Atualizar");
+      }
+    } catch {
+      showError("Erro de conexão ao alterar status.", "Erro de Conexão");
+    } finally {
+      setIsChangingStatus(false);
     }
   };
 
   // Summary Metrics
   const totalCompanies = companies.length;
   const totalActive = companies.filter((c) => c.status === "active").length;
-  const totalSubscriptionActive = companies.filter((c) => c.status === "active").length;
+  const totalSubscriptionActive = companies.filter(
+    (c) => c.subscription_status === "active"
+  ).length;
   const totalSubscriptionExpired = companies.filter(
-    (c) => c.status === "suspended" || c.status === "inactive"
+    (c) => c.subscription_status === "expired" || c.subscription_status === "canceled" || !c.subscription_status
   ).length;
 
   return (
     <div className="space-y-6">
       {/* 1. TOPO DA PÁGINA */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-1">
-            <Building2 className="w-4 h-4" />
-            <span>Gestão Multi-Tenancy</span>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
+              <Building2 className="w-6 h-6 text-indigo-400" />
+              Empresas & Clientes
+            </h1>
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Empresas & Clientes
-          </h1>
-          <p className="text-slate-400 text-xs sm:text-sm mt-0.5">
+          <p className="text-xs text-slate-400 mt-1">
             Cadastre, monitore e defina quotas operacionais para as empresas do ecossistema.
           </p>
         </div>
@@ -245,18 +303,18 @@ export default function CompaniesPage() {
           <button
             onClick={() => fetchCompanies()}
             disabled={loading}
-            className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-            title="Atualizar lista"
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all focus:outline-none disabled:opacity-50 shrink-0"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-indigo-400" : ""}`} />
+            <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${loading ? "animate-spin" : ""}`} />
+            <span className="whitespace-nowrap">Atualizar</span>
           </button>
 
           <Link
             href="/sa/companies/new"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 text-white text-xs font-bold shadow-lg shadow-indigo-600/25 hover:shadow-indigo-600/40 hover:scale-[1.02] active:scale-[0.98] transition-all"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/25 transition-all hover:scale-[1.02] active:scale-[0.98] shrink-0"
           >
-            <Plus className="w-4 h-4" />
-            <span>Nova Empresa</span>
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="whitespace-nowrap">Nova Empresa</span>
           </Link>
         </div>
       </div>
@@ -372,7 +430,7 @@ export default function CompaniesPage() {
                   <th className="px-5 py-3.5">Empresa / Razão Social</th>
                   <th className="px-5 py-3.5">Documento / Contato</th>
                   <th className="px-5 py-3.5">Plano</th>
-                  <th className="px-5 py-3.5">Quotas (Instâncias / Msgs)</th>
+                  <th className="px-5 py-3.5">Limites Operacionais</th>
                   <th className="px-5 py-3.5">Status</th>
                   <th className="px-5 py-3.5 text-right">Ações</th>
                 </tr>
@@ -429,38 +487,72 @@ export default function CompaniesPage() {
                       </div>
                     </td>
 
-                    {/* Plano */}
+                    {/* Plano / Assinatura Atual */}
                     <td className="px-5 py-4">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 font-semibold text-[11px]">
-                        <Layers className="w-3 h-3" />
-                        {company.plan}
-                      </span>
+                      {company.active_subscription_id ? (
+                        <div className="space-y-1">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 font-semibold text-[11px]">
+                            <Layers className="w-3 h-3" />
+                            {company.current_plan_name || company.plan}
+                          </span>
+                          <div className="flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                            <span>Assinatura Ativa</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 font-semibold text-[11px]">
+                            <AlertTriangle className="w-3 h-3 text-amber-400" />
+                            <span>Sem Assinatura</span>
+                          </span>
+                        </div>
+                      )}
                     </td>
 
-                    {/* Quotas */}
+                    {/* Limites Operacionais */}
                     <td className="px-5 py-4">
-                      <div className="space-y-1 text-[11px]">
-                        <div className="flex items-center gap-1.5 text-slate-300">
-                          <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>Max {company.max_instances} instâncias</span>
+                      {company.active_subscription_id && company.subscription_status === "active" ? (
+                        <div className="space-y-1 text-[11px]">
+                          <div className="flex items-center gap-1.5 text-slate-300">
+                            <Users className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                            <span>
+                              {company.quota_max_groups === 0 ? "Grupos: Ilimitado" : `${company.quota_max_groups ?? 0} grupos`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-slate-300">
+                            <Package className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                            <span>
+                              {company.quota_max_products === 0 ? "Produtos: Ilimitado" : `${company.quota_max_products ?? 0} produtos`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-slate-400">
+                            <MessageSquare className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span>
+                              {(company.quota_max_messages_day ?? company.max_messages_day).toLocaleString("pt-BR")} msgs/dia
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5 text-slate-400">
-                          <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
-                          <span>{company.max_messages_day.toLocaleString("pt-BR")} msgs/dia</span>
+                      ) : (
+                        <div className="text-slate-500 text-[11px] italic flex items-center gap-1.5">
+                          <span>Sem limites definidos</span>
                         </div>
-                      </div>
+                      )}
                     </td>
 
                     {/* Status */}
                     <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                      <button
+                        type="button"
+                        onClick={() => handleOpenStatusModal(company)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all hover:scale-105 cursor-pointer ${
                           company.status === "active"
-                            ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                            ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25"
                             : company.status === "suspended"
-                            ? "bg-rose-500/15 text-rose-300 border border-rose-500/30"
-                            : "bg-slate-800 text-slate-400 border border-slate-700"
+                            ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25"
+                            : "bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700"
                         }`}
+                        title="Clique para alterar status"
                       >
                         <span
                           className={`w-1.5 h-1.5 rounded-full ${
@@ -471,12 +563,15 @@ export default function CompaniesPage() {
                               : "bg-slate-500"
                           }`}
                         />
-                        {company.status === "active"
-                          ? "Ativa"
-                          : company.status === "suspended"
-                          ? "Suspensa"
-                          : "Inativa"}
-                      </span>
+                        <span>
+                          {company.status === "active"
+                            ? "Ativa"
+                            : company.status === "suspended"
+                            ? "Suspensa"
+                            : "Inativa"}
+                        </span>
+                        <ArrowUpDown className="w-2.5 h-2.5 ml-0.5 opacity-60" />
+                      </button>
                     </td>
 
                     {/* Ações */}
@@ -609,7 +704,8 @@ export default function CompaniesPage() {
                   <input
                     type="text"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    maxLength={15}
+                    onChange={(e) => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
                     placeholder="(11) 99999-9999"
                     className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                   />
@@ -798,6 +894,116 @@ export default function CompaniesPage() {
                   <>
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Confirmar Exclusão</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. MODAL DE ALTERAÇÃO DE STATUS */}
+      {statusModalOpen && companyToChangeStatus && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+            onClick={() => !isChangingStatus && setStatusModalOpen(false)}
+          />
+
+          <div className="relative w-full max-w-md rounded-2xl bg-[#0b1120] border border-slate-800 p-6 shadow-2xl shadow-black space-y-5 animate-in zoom-in-95 duration-150">
+            <div className="flex items-start gap-4">
+              <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                <ArrowUpDown className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-white">Alterar Status da Empresa</h3>
+                <p className="text-xs text-slate-400">
+                  Defina o novo status operacional para a empresa <span className="font-semibold text-white">"{companyToChangeStatus.name}"</span>:
+                </p>
+              </div>
+            </div>
+
+            {/* Opções de Status */}
+            <div className="space-y-2.5 pt-1">
+              <label
+                onClick={() => setNewStatus("active")}
+                className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition-all ${
+                  newStatus === "active"
+                    ? "bg-emerald-500/10 border-emerald-500/50 text-white"
+                    : "bg-slate-900/50 border-slate-800 hover:border-slate-700 text-slate-300"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                  <div>
+                    <div className="font-bold text-xs">Ativa</div>
+                    <div className="text-[11px] text-slate-400">Acesso liberado e disparos normais</div>
+                  </div>
+                </div>
+                {newStatus === "active" && <Check className="w-4 h-4 text-emerald-400" />}
+              </label>
+
+              <label
+                onClick={() => setNewStatus("suspended")}
+                className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition-all ${
+                  newStatus === "suspended"
+                    ? "bg-rose-500/10 border-rose-500/50 text-white"
+                    : "bg-slate-900/50 border-slate-800 hover:border-slate-700 text-slate-300"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-400" />
+                  <div>
+                    <div className="font-bold text-xs">Suspensa</div>
+                    <div className="text-[11px] text-slate-400">Bloqueio de painel e suspensão de envios</div>
+                  </div>
+                </div>
+                {newStatus === "suspended" && <Check className="w-4 h-4 text-rose-400" />}
+              </label>
+
+              <label
+                onClick={() => setNewStatus("inactive")}
+                className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition-all ${
+                  newStatus === "inactive"
+                    ? "bg-slate-700/30 border-slate-500/50 text-white"
+                    : "bg-slate-900/50 border-slate-800 hover:border-slate-700 text-slate-300"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />
+                  <div>
+                    <div className="font-bold text-xs">Inativa</div>
+                    <div className="text-[11px] text-slate-400">Empresa desativada pelo Super Admin</div>
+                  </div>
+                </div>
+                {newStatus === "inactive" && <Check className="w-4 h-4 text-slate-300" />}
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setStatusModalOpen(false)}
+                disabled={isChangingStatus}
+                className="px-4 py-2 rounded-xl border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800/60 text-xs font-semibold transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmChangeStatus}
+                disabled={isChangingStatus}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/20 transition-all disabled:opacity-60"
+              >
+                {isChangingStatus ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Salvando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Confirmar Status</span>
                   </>
                 )}
               </button>

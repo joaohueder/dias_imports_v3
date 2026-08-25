@@ -21,10 +21,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 import { maskPhone } from "@/lib/validators";
 import { FloatingActionBar } from "@/components/ui/FloatingActionBar";
 
 export default function SuperAdminProfilePage() {
+  const { showError, showSuccess } = useFeedbackModal();
   const [initialData, setInitialData] = useState<{ name: string; whatsapp: string }>({ name: "", whatsapp: "" });
   const [name, setName] = useState("");
   const [email, setEmail] = useState("joaohueder@gmail.com");
@@ -61,13 +63,13 @@ export default function SuperAdminProfilePage() {
           setInitialData({ name: userName, whatsapp: userWhatsapp });
         }
       } catch {
-        toast.error("Erro ao carregar dados do perfil.");
+        showError("Erro ao carregar dados do perfil.", "Erro de Conexão");
       } finally {
         setLoading(false);
       }
     }
     loadProfile();
-  }, []);
+  }, [showError]);
 
   const handleResetForm = () => {
     setName(initialData.name);
@@ -88,21 +90,21 @@ export default function SuperAdminProfilePage() {
     e.preventDefault();
 
     if (!name.trim()) {
-      toast.error("Informe seu nome completo.");
+      showError("Informe seu nome completo.", "Nome Obrigatório");
       return;
     }
 
     if (newPassword || currentPassword) {
       if (!currentPassword) {
-        toast.error("Informe a senha atual para validar a alteração.");
+        showError("Informe a senha atual para validar a alteração.", "Senha Atual Obrigatória");
         return;
       }
       if (newPassword.length < 6) {
-        toast.error("A nova senha deve ter pelo menos 6 caracteres.");
+        showError("A nova senha deve ter pelo menos 6 caracteres.", "Senha Curta");
         return;
       }
       if (newPassword !== confirmNewPassword) {
-        toast.error("A confirmação da nova senha não confere.");
+        showError("A confirmação da nova senha não confere.", "Senhas Diferentes");
         return;
       }
     }
@@ -124,17 +126,17 @@ export default function SuperAdminProfilePage() {
       const data = await res.json();
 
       if (data.success) {
-        toast.success(data.message || "Perfil atualizado com sucesso!");
+        showSuccess(data.message || "Perfil atualizado com sucesso!", "Perfil Salvo");
         setInitialData({ name, whatsapp });
         setCurrentPassword("");
         setNewPassword("");
         setConfirmNewPassword("");
         setIsDirty(false);
       } else {
-        toast.error(data.error || "Erro ao salvar alterações no perfil.");
+        showError(data.error || "Erro ao salvar alterações no perfil.", "Falha ao Salvar");
       }
     } catch {
-      toast.error("Erro de conexão ao salvar perfil.");
+      showError("Erro de conexão ao salvar perfil.", "Erro de Conexão");
     } finally {
       setIsSubmitting(false);
     }
@@ -145,14 +147,17 @@ export default function SuperAdminProfilePage() {
       {/* 1. CABEÇALHO */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-1">
-            <User className="w-4 h-4" />
-            <span>Minha Conta Super Admin</span>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
+              <User className="w-6 h-6 text-indigo-400" />
+              Perfil do Usuário
+            </h1>
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Perfil do Usuário
-          </h1>
-          <p className="text-slate-400 text-xs sm:text-sm mt-0.5">
+          <p className="text-xs text-slate-400 mt-1">
             Gerencie seus dados pessoais, contato seguro e credenciais de acesso à governança SaaS.
           </p>
         </div>
@@ -176,21 +181,28 @@ export default function SuperAdminProfilePage() {
           {/* Card de Identidade & Avatar */}
           <div className="rounded-2xl bg-[#090f1d]/90 border border-slate-800/80 p-6 shadow-xl shadow-black/30">
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-violet-600 flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-indigo-600/30 border border-indigo-400/40 shrink-0">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500/25 to-violet-500/25 border border-indigo-500/40 flex items-center justify-center text-indigo-300 text-2xl font-black shadow-inner shrink-0">
                 {name
-                  .split(" ")
-                  .filter(Boolean)
-                  .slice(0, 2)
-                  .map((p) => p[0])
-                  .join("")
-                  .toUpperCase() || "SA"}
+                  ? (() => {
+                      const parts = name.trim().split(/\s+/);
+                      return parts.length === 1
+                        ? parts[0].substring(0, 2).toUpperCase()
+                        : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+                    })()
+                  : "SA"}
               </div>
 
               <div className="flex-1 text-center sm:text-left space-y-2">
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                  <h2 className="text-lg font-bold text-white">{name || "Super Admin"}</h2>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                    SUPER ADMIN MASTER
+                  <h2 className="text-lg font-bold text-white">{name || "Usuário"}</h2>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      role === "SUPER_ADMIN"
+                        ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
+                        : "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
+                    }`}
+                  >
+                    {role === "SUPER_ADMIN" ? "SUPER ADMIN MASTER" : "ADMINISTRADOR"}
                   </span>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -201,7 +213,7 @@ export default function SuperAdminProfilePage() {
                 <div className="flex items-center justify-center sm:justify-start gap-4 text-[11px] text-slate-500 pt-1 font-mono">
                   <span className="flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                    Acesso Global Irrestrito
+                    {role === "SUPER_ADMIN" ? "Acesso Global Irrestrito" : "Acesso Restrito por Permissões"}
                   </span>
                   {createdAt && (
                     <span className="flex items-center gap-1">
@@ -288,7 +300,7 @@ export default function SuperAdminProfilePage() {
               <div>
                 <h3 className="text-sm font-bold text-white">Alterar Senha de Acesso</h3>
                 <p className="text-[11px] text-slate-400">
-                  Preencha apenas caso deseje modificar sua senha de Super Admin.
+                  Preencha apenas caso deseje modificar sua senha de acesso.
                 </p>
               </div>
             </div>

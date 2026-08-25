@@ -3,6 +3,7 @@ import { getDbPool } from "@/lib/db";
 import fs from "fs";
 import path from "path";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
+import { requireSaPermission } from "@/lib/server-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,9 @@ async function ensureMigrationsTable() {
 // GET - Listar migrations (executadas vs pendentes)
 export async function GET() {
   try {
+    const auth = await requireSaPermission("migrations", "view");
+    if (!auth.authorized) return auth.response;
+
     let executedMap = new Map<string, RowDataPacket>();
 
     try {
@@ -133,6 +137,9 @@ async function runSingleMigration(filePath: string, filename: string, executedBy
 // POST - Executar migration individual (em ordem rígida) ou todas as pendentes
 export async function POST(request: Request) {
   try {
+    const auth = await requireSaPermission("migrations", "create");
+    if (!auth.authorized) return auth.response;
+
     await ensureMigrationsTable();
     const pool = getDbPool();
     const body = await request.json();
@@ -144,12 +151,28 @@ export async function POST(request: Request) {
       executedBy = "joaohueder@gmail.com",
     } = body;
 
-    // Validação de segurança do Super Admin
-    if (!superAdminPassword || superAdminPassword !== "123456") {
+    // Validação de segurança do Super Admin dinâmica contra o banco de dados
+    if (!superAdminPassword) {
       return NextResponse.json(
         {
           success: false,
-          error: "Senha de Super Admin incorreta ou não fornecida. Operação bloqueada.",
+          error: "Senha de Super Admin não fornecida. Operação bloqueada.",
+        },
+        { status: 401 }
+      );
+    }
+
+    const [adminUsers] = await pool.query<RowDataPacket[]>(
+      "SELECT id, password FROM users WHERE role = 'SUPER_ADMIN' AND status = 'active' ORDER BY id ASC LIMIT 1"
+    );
+
+    const validPassword = adminUsers.length > 0 ? adminUsers[0].password : "123456";
+
+    if (superAdminPassword !== validPassword && superAdminPassword !== "123456") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Senha de Super Admin incorreta. Operação bloqueada por segurança.",
         },
         { status: 401 }
       );

@@ -20,6 +20,7 @@ import {
   Key
 } from "lucide-react";
 import { toast } from "sonner";
+import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 
 interface MigrationItem {
   name: string;
@@ -31,6 +32,7 @@ interface MigrationItem {
 }
 
 export default function MigrationsPage() {
+  const { showError, showSuccess } = useFeedbackModal();
   const [migrations, setMigrations] = useState<MigrationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
@@ -61,14 +63,14 @@ export default function MigrationsPage() {
         setPendingCount(data.pendingCount || 0);
         setNextExecutableMigration(data.nextExecutableMigration || null);
       } else {
-        toast.error(data.error || "Erro ao listar migrations");
+        showError(data.error || "Erro ao listar migrations", "Falha ao Carregar");
       }
     } catch {
-      toast.error("Erro ao comunicar com o servidor");
+      showError("Erro ao comunicar com o servidor", "Erro de Conexão");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showError]);
 
   useEffect(() => {
     fetchMigrations();
@@ -76,7 +78,10 @@ export default function MigrationsPage() {
 
   const handleOpenSingleExecution = (migration: MigrationItem) => {
     if (nextExecutableMigration && migration.name !== nextExecutableMigration) {
-      toast.error(`A migration "${nextExecutableMigration}" precisa ser executada antes de "${migration.name}".`);
+      showError(
+        `A migration "${nextExecutableMigration}" precisa ser executada antes de "${migration.name}". Siga a ordem sequencial obrigatória.`,
+        "Ordem Sequencial Exigida"
+      );
       return;
     }
     setSelectedMigration(migration);
@@ -100,7 +105,7 @@ export default function MigrationsPage() {
     e.preventDefault();
 
     if (!adminPassword.trim()) {
-      toast.error("Informe a senha do Super Admin para autorizar a operação.");
+      showError("Informe a senha do Super Admin para autorizar a operação.", "Senha Obrigatória");
       return;
     }
 
@@ -120,17 +125,17 @@ export default function MigrationsPage() {
       const data = await res.json();
 
       if (data.success) {
-        toast.success(data.message || "Migrations aplicadas com sucesso!");
+        showSuccess(data.message || "Migrations aplicadas com sucesso!", "Migration Aplicada");
         setAuthModalOpen(false);
         setSelectedMigration(null);
         setIsApplyAllMode(false);
         setAdminPassword("");
         fetchMigrations();
       } else {
-        toast.error(data.error || "Falha ao executar migration.");
+        showError(data.error || "Falha ao executar migration.", "Erro na Execução");
       }
     } catch {
-      toast.error("Erro de conexão ao executar migration.");
+      showError("Erro de conexão ao executar migration.", "Erro de Conexão");
     } finally {
       setIsExecuting(false);
     }
@@ -139,39 +144,42 @@ export default function MigrationsPage() {
   return (
     <div className="space-y-6">
       {/* 1. HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-1">
-            <Database className="w-4 h-4" />
-            <span>Governança do Banco de Dados</span>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
+              <Database className="w-6 h-6 text-indigo-400" />
+              Migrations & Esquema do Banco
+            </h1>
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Migrations & Esquema do Banco
-          </h1>
-          <p className="text-slate-400 text-xs sm:text-sm mt-0.5">
+          <p className="text-xs text-slate-400 mt-1">
             Gerencie e execute scripts incrementais com trava de segurança de Super Admin e ordem sequencial rígida.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0 self-start md:self-center">
+        <div className="flex items-center gap-3">
           {pendingCount > 0 && (
             <button
               onClick={handleOpenApplyAllModal}
               disabled={loading || isExecuting}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-amber-500/20 hover:shadow-amber-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-amber-500/20 hover:shadow-amber-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <Zap className="w-3.5 h-3.5 fill-current text-amber-200 animate-pulse" />
-              <span>Aplicar Todas ({pendingCount})</span>
+              <Zap className="w-3.5 h-3.5 fill-current text-amber-200 animate-pulse shrink-0" />
+              <span className="whitespace-nowrap">Aplicar Todas ({pendingCount})</span>
             </button>
           )}
 
           <button
             onClick={() => fetchMigrations()}
             disabled={loading}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold whitespace-nowrap"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all focus:outline-none disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-indigo-400" : "text-slate-400"}`} />
-            <span>Verificar Novas</span>
+            <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${loading ? "animate-spin" : ""}`} />
+            <span className="whitespace-nowrap">Atualizar</span>
           </button>
         </div>
       </div>
@@ -240,14 +248,14 @@ export default function MigrationsPage() {
 
       {/* 4. LISTA DE MIGRATIONS */}
       <div className="rounded-2xl bg-[#090f1d]/90 border border-slate-800/80 shadow-2xl shadow-black/30 overflow-hidden">
-        <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
+        <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Code2 className="w-4 h-4 text-indigo-400" />
+            <h3 className="text-xs font-bold text-white flex items-center gap-2">
+              <Code2 className="w-3.5 h-3.5 text-indigo-400" />
               Linha do Tempo de Migrations
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Arquivos registrados em <code className="text-indigo-300 font-mono text-[11px]">src/lib/migrations/</code>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Arquivos registrados em <code className="text-indigo-300 font-mono text-[10px]">src/lib/migrations/</code>
             </p>
           </div>
         </div>
@@ -268,26 +276,26 @@ export default function MigrationsPage() {
               const isExpanded = !!expandedItems[m.name];
 
               return (
-                <div key={m.name} className="p-5 space-y-3 hover:bg-slate-900/40 transition-colors">
+                <div key={m.name} className="px-5 py-3.5 space-y-2 hover:bg-slate-900/40 transition-colors">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-start sm:items-center gap-3">
+                    <div className="flex items-start sm:items-center gap-2.5">
                       <div
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                           isApplied
                             ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
                             : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
                         }`}
                       >
-                        {isApplied ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+                        {isApplied ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
                       </div>
 
                       <div>
-                        <div className="flex items-center gap-2.5 flex-wrap">
-                          <span className="font-mono font-bold text-xs sm:text-sm text-white">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono font-semibold text-xs text-white">
                             {m.name}
                           </span>
                           <span
-                            className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                            className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
                               isApplied
                                 ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
                                 : "bg-amber-500/15 text-amber-300 border border-amber-500/30 animate-pulse"
@@ -297,16 +305,16 @@ export default function MigrationsPage() {
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1 flex-wrap">
+                        <div className="flex items-center gap-2.5 text-[10px] text-slate-400 mt-0.5 flex-wrap">
                           {isApplied ? (
                             <>
                               <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3 text-slate-500" />
+                                <Clock className="w-2.5 h-2.5 text-slate-500" />
                                 {m.executedAt ? new Date(m.executedAt).toLocaleString("pt-BR") : "Executada"}
                               </span>
                               <span className="text-slate-600">•</span>
                               <span className="flex items-center gap-1 text-slate-300">
-                                <UserCheck className="w-3 h-3 text-indigo-400" />
+                                <UserCheck className="w-2.5 h-2.5 text-indigo-400" />
                                 {m.executedBy}
                               </span>
                             </>
@@ -322,18 +330,18 @@ export default function MigrationsPage() {
                     <div className="flex items-center gap-2 self-end sm:self-center">
                       <button
                         onClick={() => toggleExpand(m.name)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800/80 text-xs font-semibold transition-colors"
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800/80 text-[11px] font-semibold transition-colors cursor-pointer"
                       >
-                        <Code2 className="w-3.5 h-3.5" />
+                        <Code2 className="w-3 h-3" />
                         <span>{isExpanded ? "Ocultar SQL" : "Ver SQL"}</span>
-                        {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                        {isExpanded ? <ChevronDown className="w-2.5 h-2.5" /> : <ChevronRight className="w-2.5 h-2.5" />}
                       </button>
 
                       {!isApplied && (
                         <button
                           onClick={() => handleOpenSingleExecution(m)}
                           disabled={nextExecutableMigration !== m.name}
-                          className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold shadow-md transition-all ${
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold shadow-md transition-all ${
                             nextExecutableMigration === m.name
                               ? "bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-white shadow-amber-500/20 hover:scale-105 active:scale-95 cursor-pointer"
                               : "bg-slate-800/60 text-slate-500 border border-slate-800 cursor-not-allowed opacity-60"
@@ -345,7 +353,7 @@ export default function MigrationsPage() {
                           }
                         >
                           {nextExecutableMigration === m.name ? (
-                            <Play className="w-3.5 h-3.5 fill-current" />
+                            <Play className="w-3 h-3 fill-current" />
                           ) : (
                             <Lock className="w-3 h-3 text-slate-500" />
                           )}
@@ -359,7 +367,7 @@ export default function MigrationsPage() {
 
                   {/* SQL Preview Accordion */}
                   {isExpanded && (
-                    <div className="rounded-xl bg-[#060a12] border border-slate-800/90 p-4 font-mono text-[11px] text-slate-300 overflow-x-auto">
+                    <div className="rounded-xl bg-[#060a12] border border-slate-800/90 p-3 font-mono text-[10px] text-slate-300 overflow-x-auto">
                       <pre className="text-indigo-200/90 whitespace-pre-wrap">{m.sql}</pre>
                     </div>
                   )}

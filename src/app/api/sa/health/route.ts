@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { getDbPool } from "@/lib/db";
 import os from "os";
+import { requireSaPermission } from "@/lib/server-permissions";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const auth = await requireSaPermission("health", "view");
+  if (!auth.authorized) return auth.response;
+
   const startTime = Date.now();
   
   // DB Health

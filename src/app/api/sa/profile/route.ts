@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { getDbPool, initAuthDatabase } from "@/lib/db";
+import { getCurrentSaUser, verifySessionToken } from "@/lib/session";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
-// GET - Obter perfil do Super Admin logado
-export async function GET() {
+// GET - Obter perfil do usuário logado (Super Admin ou Admin)
+export async function GET(request: Request) {
   try {
     try {
       await initAuthDatabase();
@@ -13,26 +15,71 @@ export async function GET() {
       console.warn("Aviso ao inicializar DB no profile GET:", dbInitErr);
     }
 
-    const email = "joaohueder@gmail.com";
+    const cookieStore = await cookies();
+    const token = cookieStore.get("sa_auth_token")?.value;
+    const userIdCookie = cookieStore.get("sa_user_id")?.value;
+    const userEmailCookie = cookieStore.get("sa_user_email")?.value;
+
+    let targetEmail: string | null = null;
+    let targetId: number | null = null;
+
+    if (token) {
+      const verified = verifySessionToken(token);
+      if (verified) {
+        targetId = verified.id;
+        targetEmail = verified.email;
+      }
+    }
+
+    if (!targetEmail && userEmailCookie) {
+      targetEmail = decodeURIComponent(userEmailCookie);
+    }
+    if (!targetId && userIdCookie) {
+      targetId = parseInt(userIdCookie, 10);
+    }
+
+    const pool = getDbPool();
+    let query = "SELECT id, name, email, whatsapp, role, permissions, status, created_at, updated_at FROM users WHERE ";
+    const params: (string | number)[] = [];
+
+    if (targetId) {
+      query += "id = ? LIMIT 1";
+      params.push(targetId);
+    } else if (targetEmail) {
+      query += "email = ? LIMIT 1";
+      params.push(targetEmail);
+    } else {
+      query += "email = ? LIMIT 1";
+      params.push("joaohueder@gmail.com");
+    }
 
     try {
-      const pool = getDbPool();
-      const [rows] = await pool.query<RowDataPacket[]>(
-        "SELECT id, name, email, whatsapp, role, status, created_at, updated_at FROM users WHERE email = ? LIMIT 1",
-        [email]
-      );
+      const [rows] = await pool.query<RowDataPacket[]>(query, params);
 
       if (rows.length > 0) {
+        const user = rows[0];
+        let permissions = {};
+        if (user.permissions) {
+          try {
+            permissions = typeof user.permissions === "string" ? JSON.parse(user.permissions) : user.permissions;
+          } catch {
+            permissions = {};
+          }
+        }
+
         return NextResponse.json({
           success: true,
-          user: rows[0],
+          user: {
+            ...user,
+            permissions,
+          },
         });
       }
     } catch (queryErr) {
       console.warn("Aviso ao consultar usuário no banco, retornando fallback seguro:", queryErr);
     }
 
-    // Fallback padrão se não houver conexão com o banco
+    // Fallback padrão se não houver conexão com o banco nem sessão
     return NextResponse.json({
       success: true,
       user: {
@@ -51,7 +98,7 @@ export async function GET() {
   }
 }
 
-// PUT - Atualizar perfil do Super Admin (Nome, WhatsApp, Senha)
+// PUT - Atualizar perfil do usuário logado (Nome, WhatsApp, Senha)
 export async function PUT(request: Request) {
   try {
     try {
@@ -71,7 +118,8 @@ export async function PUT(request: Request) {
       confirmNewPassword,
     } = body;
 
-    const email = "joaohueder@gmail.com";
+    const currentUser = await getCurrentSaUser();
+    const email = currentUser?.email || "joaohueder@gmail.com";
 
     if (!name || name.trim().length < 3) {
       return NextResponse.json(

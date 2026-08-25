@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDbPool, initAuthDatabase } from "@/lib/db";
+import { signSessionToken } from "@/lib/session";
 import { RowDataPacket } from "mysql2";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +10,7 @@ interface UserRow extends RowDataPacket {
   name: string;
   email: string;
   password: string;
-  role: "SUPER_ADMIN" | "COMPANY_ADMIN" | "USER";
+  role: "SUPER_ADMIN" | "ADMIN" | "COMPANY_ADMIN" | "USER";
   company_id: number | null;
   status: "active" | "inactive";
 }
@@ -71,14 +72,14 @@ export async function POST(request: Request) {
       );
     }
 
-    if (user.role === "SUPER_ADMIN") {
-      return NextResponse.json({
+    if (user.role === "SUPER_ADMIN" || user.role === "ADMIN") {
+      const response = NextResponse.json({
         success: true,
-        role: "SUPER_ADMIN",
+        role: user.role,
         redirectTo: "/sa",
         message:
           portalType === "painel"
-            ? "Super Administrador identificado. Redirecionando para /sa."
+            ? "Operador do SaaS identificado. Redirecionando para /sa."
             : undefined,
         user: {
           id: user.id,
@@ -87,13 +88,37 @@ export async function POST(request: Request) {
           role: user.role,
         },
       });
+
+      // Assinar e configurar cookies HttpOnly seguros
+      const authToken = signSessionToken({ id: user.id, email: user.email, role: user.role });
+      const isProduction = process.env.NODE_ENV === "production";
+
+      response.cookies.set("sa_auth_token", authToken, {
+        path: "/",
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: "lax",
+      });
+      response.cookies.set("sa_user_id", String(user.id), {
+        path: "/",
+        httpOnly: false,
+        secure: isProduction,
+        sameSite: "lax",
+      });
+      response.cookies.set("sa_user_email", user.email, {
+        path: "/",
+        httpOnly: false,
+        secure: isProduction,
+        sameSite: "lax",
+      });
+      return response;
     }
 
     if (portalType === "sa") {
       return NextResponse.json(
         {
           success: false,
-          message: "Acesso negado. Esta conta não possui privilégios de Super Administrador.",
+          message: "Acesso negado. Esta conta não possui privilégios de acesso ao SaaS.",
         },
         { status: 403 }
       );

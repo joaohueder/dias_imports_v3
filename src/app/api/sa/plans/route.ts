@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { getDbPool, initAuthDatabase } from "@/lib/db";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
+import { requireSaPermission } from "@/lib/server-permissions";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
+    const auth = await requireSaPermission("plans", "view");
+    if (!auth.authorized) return auth.response;
+
     await initAuthDatabase();
     const pool = getDbPool();
     const { searchParams } = new URL(request.url);
@@ -15,6 +19,7 @@ export async function GET(request: Request) {
     let query = `
       SELECT 
         p.*,
+        (SELECT COUNT(*) FROM subscriptions s WHERE s.plan_id = p.id) as subscriptions_count,
         (SELECT COUNT(*) FROM subscriptions s WHERE s.plan_id = p.id AND s.status = 'active') as active_subscriptions_count
       FROM plans p
       WHERE 1=1
@@ -47,6 +52,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireSaPermission("plans", "create");
+    if (!auth.authorized) return auth.response;
+
     await initAuthDatabase();
     const pool = getDbPool();
     const body = await request.json();

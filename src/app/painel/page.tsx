@@ -1,13 +1,32 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { Building2, MessageSquareShare, Users2, Zap, ArrowLeft } from "lucide-react";
+"use client";
 
-export const metadata: Metadata = {
-  title: "Painel da Empresa | JH7 Marketing",
-  description: "Gerenciamento de marketing e campanhas em grupos de WhatsApp",
-};
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Building2, MessageSquareShare, Users2, Zap, ArrowLeft, LogOut, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
 export default function CompanyDashboardPage() {
+  const router = useRouter();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Ignora erro de rede
+    } finally {
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.clear();
+          sessionStorage.clear();
+        } catch {}
+      }
+      toast.info("Sessão finalizada com sucesso!");
+      router.push("/painel/login");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6 sm:p-10">
       <div className="max-w-6xl mx-auto space-y-8">
@@ -27,13 +46,18 @@ export default function CompanyDashboardPage() {
             </div>
           </div>
 
-          <Link
-            href="/painel/login"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors self-start sm:self-auto"
+          <button
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors self-start sm:self-auto cursor-pointer disabled:opacity-60"
           >
-            <ArrowLeft className="w-4 h-4" />
+            {isLoggingOut ? (
+              <RefreshCw className="w-4 h-4 animate-spin text-slate-400" />
+            ) : (
+              <LogOut className="w-4 h-4 text-rose-400" />
+            )}
             <span>Sair</span>
-          </Link>
+          </button>
         </header>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">

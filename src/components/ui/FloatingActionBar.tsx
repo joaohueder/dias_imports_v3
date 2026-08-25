@@ -6,6 +6,7 @@ import { Check, RefreshCw, X } from "lucide-react";
 interface FloatingActionBarProps {
   isVisible: boolean;
   isSubmitting: boolean;
+  disabled?: boolean;
   onCancel: () => void;
   formId?: string;
   onSave?: () => void;
@@ -18,6 +19,7 @@ interface FloatingActionBarProps {
 export function FloatingActionBar({
   isVisible,
   isSubmitting,
+  disabled = false,
   onCancel,
   formId,
   onSave,
@@ -27,6 +29,8 @@ export function FloatingActionBar({
   label = "Alterações não salvas",
 }: FloatingActionBarProps) {
   if (!isVisible) return null;
+
+  const isSaveDisabled = isSubmitting || disabled;
 
   return (
     <div className="fixed bottom-14 left-0 right-0 z-40 px-4 sm:px-8 pointer-events-none transition-all duration-300 animate-in fade-in slide-in-from-bottom-3">
@@ -51,8 +55,12 @@ export function FloatingActionBar({
             type={formId ? "submit" : "button"}
             form={formId}
             onClick={!formId ? onSave : undefined}
-            disabled={isSubmitting}
-            className="flex items-center gap-1.5 px-4 py-1.5 text-[11px] font-bold rounded-lg bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-md shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
+            disabled={isSaveDisabled}
+            className={`flex items-center gap-1.5 px-4 py-1.5 text-[11px] font-bold rounded-lg ${
+              isSaveDisabled
+                ? "bg-slate-800 text-slate-500 cursor-not-allowed opacity-60 border border-slate-700"
+                : "bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-md shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+            } transition-all`}
           >
             {isSubmitting ? (
               <>

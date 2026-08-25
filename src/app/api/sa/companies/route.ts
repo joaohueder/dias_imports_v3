@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { getDbPool, initAuthDatabase } from "@/lib/db";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
+import { requireSaPermission } from "@/lib/server-permissions";
+import { createEvolutionInstance } from "@/lib/evolution";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
 // GET - Listar empresas com filtros opcionais
 export async function GET(request: Request) {
   try {
+    const auth = await requireSaPermission("companies", "view");
+    if (!auth.authorized) return auth.response;
+
     await initAuthDatabase();
     const pool = getDbPool();
 
@@ -17,9 +23,31 @@ export async function GET(request: Request) {
     let query = `
       SELECT 
         c.*,
-        COUNT(DISTINCT u.id) as user_count
+        COALESCE(u.user_count, 0) as user_count,
+        COALESCE(sub.plan_snapshot_name, p.name, c.plan) as current_plan_name,
+        sub.status as subscription_status,
+        sub.id as active_subscription_id,
+        COALESCE(sub.plan_snapshot_max_groups, p.max_groups, 0) as quota_max_groups,
+        COALESCE(sub.plan_snapshot_max_products, p.max_products, 0) as quota_max_products,
+        COALESCE(sub.plan_snapshot_max_messages_day, p.max_messages_day, c.max_messages_day) as quota_max_messages_day,
+        COALESCE(sub.plan_snapshot_max_instances, p.max_instances, c.max_instances) as quota_max_instances
       FROM companies c
-      LEFT JOIN users u ON u.company_id = c.id
+      LEFT JOIN (
+        SELECT company_id, COUNT(*) as user_count
+        FROM users
+        GROUP BY company_id
+      ) u ON u.company_id = c.id
+      LEFT JOIN (
+        SELECT s1.*
+        FROM subscriptions s1
+        INNER JOIN (
+          SELECT company_id, MAX(id) as max_id
+          FROM subscriptions
+          WHERE status = 'active'
+          GROUP BY company_id
+        ) s2 ON s1.id = s2.max_id
+      ) sub ON sub.company_id = c.id
+      LEFT JOIN plans p ON sub.plan_id = p.id
       WHERE 1=1
     `;
     const params: (string | number)[] = [];
@@ -35,7 +63,7 @@ export async function GET(request: Request) {
       params.push(status);
     }
 
-    query += ` GROUP BY c.id ORDER BY c.created_at DESC`;
+    query += ` ORDER BY c.created_at DESC`;
 
     const [rows] = await pool.query<RowDataPacket[]>(query, params);
 
@@ -45,6 +73,7 @@ export async function GET(request: Request) {
       total: rows.length,
     });
   } catch (error: unknown) {
+    console.error("Erro na rota /api/sa/companies:", error);
     const message = error instanceof Error ? error.message : "Erro ao listar empresas";
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
@@ -53,6 +82,9 @@ export async function GET(request: Request) {
 // POST - Criar nova empresa
 export async function POST(request: Request) {
   try {
+    const auth = await requireSaPermission("companies", "create");
+    if (!auth.authorized) return auth.response;
+
     await initAuthDatabase();
     const pool = getDbPool();
     const body = await request.json();
@@ -181,9 +213,49 @@ export async function POST(request: Request) {
       );
     }
 
+    // Criar automaticamente uma instância do WhatsApp para a nova empresa
+    try {
+      const cleanCompanyName = (trade_name || name || "EMPRESA")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
+        .toUpperCase()
+        .slice(0, 16);
+
+      const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const instanceName = `${cleanCompanyName || "EMPRESA"}-${randomSuffix}`;
+      const instanceKey = `inst_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+
+      // Cria na Evolution API
+      await createEvolutionInstance({
+        instanceName,
+        qrcode: true,
+        integration: "WHATSAPP-BAILEYS",
+      });
+
+      // Salva no banco de dados local
+      await pool.query(
+        `INSERT INTO instances (
+          company_id, name, whatsapp_number, server_url, api_key, instance_key, status
+        ) VALUES (?, ?, ?, ?, ?, ?, 'disconnected')`,
+        [
+          companyId,
+          instanceName,
+          whatsapp ? String(whatsapp).trim() : null,
+          null,
+          null,
+          instanceKey,
+        ]
+      );
+    } catch (instError) {
+      console.error("Aviso: Erro ao criar instância automática para a empresa:", instError);
+    }
+
     return NextResponse.json({
       success: true,
-      message: "Empresa e credenciais de acesso cadastradas com sucesso.",
+      message: "Empresa, credenciais de acesso e instância de WhatsApp cadastradas com sucesso.",
       companyId,
     });
   } catch (error: unknown) {

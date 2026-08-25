@@ -37,6 +37,7 @@ Telas de autenticação desenvolvidas com estética moderna/glassmorphism dark m
 - Criação e inicialização da tabela `users`.
 - Autenticação 100% dinâmica via banco de dados sem credenciais hardcoded no código-fonte.
 - Endpoint `src/app/api/auth/login/route.ts` valida credenciais contra o banco de dados e retorna os dados de sessão e redirecionamento correspondente ao perfil (`SUPER_ADMIN` -> `/sa`, `COMPANY_ADMIN`/`USER` -> `/painel`).
+- Endpoint `src/app/api/auth/logout/route.ts` (POST) encerra e invalida cookies de sessão de autenticação, limpando caches e redirecionando o usuário para a tela de login.
 
 ## 2. Rotas
 - `/sa/login`: Tela de login do Super Admin do SaaS (Paleta Ãndigo/Violeta).

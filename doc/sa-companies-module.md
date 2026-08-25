@@ -1,7 +1,7 @@
 # Documentação & Memória: Módulo de Empresas Multi-Tenancy (/sa/companies)
 
 **Data:** 2026-08-25  
-**Versão:** 2026.08.0005  
+**Versão:** 2026.08.0033  
 **Responsável Técnico:** JH7-DESENVOLVEDOR, JH7-DESIGNER, JH7-MESTRE-DOCUMENTACAO, JH7-SECURITY-GUARDIAN  
 
 ---
@@ -14,14 +14,22 @@ O módulo **Empresas** no painel do Super Admin (`/sa/companies`) centraliza o g
 1. **Listagem & Filtros Avançados:**
    - Pesquisa em tempo real por Razão Social, Nome Fantasia, CNPJ/CPF e E-mail corporativo.
    - Filtro por status (`active`, `inactive`, `suspended`).
+   - Exibição em tempo real do **Plano e Assinatura Vigente** vinculado (com snapshot de limites e status da assinatura ativa/expirada).
+   - Exibição condicional de **Limites Operacionais**: Limite de Grupos, Limite de Produtos e Limite de Mensagens/dia exibidos exclusivamente quando houver assinatura ativa (`subscription_status === 'active'`); caso contrário, exibe o aviso indicativo "Sem limites definidos".
    - Contadores em tempo real de instâncias liberadas, usuários vinculados e total de tenants ativos.
 
-2. **Cadastro & Edição de Tenants:**
-   - Criação e atualização de empresas com validação de duplicidade de documentos fiscais.
-   - Definição de limites operacionais de WhatsApp: limite de instâncias simultâneas e limite diário de mensagens disparadas.
-   - Associação de plano (`Starter`, `Pro`, `Enterprise`, `Custom`).
+2. **Cadastro & Edição de Tenants em Abas:**
+   - **Aba "Dados da Empresa"**: Contém as seções de **Dados Cadastrais** (Razão Social, Nome Fantasia, CNPJ/CPF, E-mail, WhatsApps e WhatsApp exclusivo de acesso admin OTP) e **Endereço & Localização** (CEP com busca automática, Logradouro, Número, Complemento, Bairro, Cidade, Estado).
+   - **Aba "Assinatura"** (na edição): Gestão de **Plano e Assinatura** (Assinatura Atual Vigente com snapshot imutável de limites, edição pontual/manual de limites por card com botão de edição rápida, ação de expirar ou alterar/renovar plano e histórico com tabela retroativa de assinaturas anteriores).
+   - **Aba "Instância"** (na edição): Gerenciamento completo das instâncias WhatsApp vinculadas à empresa (listagem de instâncias com status em tempo real, QR Code/Conexão, telefone conectado, métricas de envio, ações de Conectar/Desconectar/Reiniciar, criação, edição e exclusão de instâncias com controle de cota por plano).
+   - **API de Limites Personalizados**: Endpoint `PATCH /api/sa/subscriptions/[id]/limits` para ajustar individualmente cotas (`plan_snapshot_max_groups`, `plan_snapshot_max_products`, `plan_snapshot_max_messages_day`).
+   - Barra Flutuante de Ação (`FloatingActionBar`) para salvar ou cancelar alterações de forma padronizada.
 
-3. **Exclusão Segura com Modal de Confirmação:**
+3. **Alteração Rápida de Status com Modal:**
+   - Badge de status interativo e clicável na listagem com abertura de modal para seleção de status (`Ativa`, `Suspensa`, `Inativa`).
+   - Endpoint `PATCH /api/sa/companies/[id]/status` com validação de status e persistência imediata no banco.
+
+4. **Exclusão Segura com Modal de Confirmação:**
    - Modal com alerta de impacto nos usuários vinculados.
    - Desassociação automática (`UPDATE users SET company_id = NULL`) antes de remoção do registro para integridade relacional.
 
