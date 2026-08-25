@@ -16,6 +16,7 @@ interface UserRow extends RowDataPacket {
 }
 
 export async function POST(request: Request) {
+  console.log("[API /api/auth/login] Recebida requisição POST para login...");
   try {
     const body = await request.json();
     const { email, password, portalType } = body;
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
 
     const db = getDbPool();
 
+    console.log("[API /api/auth/login] Buscando usuário:", cleanEmail);
     const [rows] = await db.query<UserRow[]>(
       "SELECT id, name, email, password, role, company_id, status FROM users WHERE LOWER(email) = ? LIMIT 1",
       [cleanEmail]
@@ -72,6 +74,7 @@ export async function POST(request: Request) {
       );
     }
 
+    console.log("[API /api/auth/login] Usuário autenticado com sucesso:", { id: user.id, role: user.role, email: user.email });
     if (user.role === "SUPER_ADMIN" || user.role === "ADMIN") {
       const response = NextResponse.json({
         success: true,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDbPool, initAuthDatabase } from "@/lib/db";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
+import { sendEvolutionText } from "@/lib/evolution";
 
 export const dynamic = "force-dynamic";
 
@@ -87,16 +88,50 @@ export async function POST(request: Request) {
       [otpCode, expiresAt, user.id]
     );
 
-    // Em produção integrará com o disparador WhatsApp; em dev/simulação logamos e retornamos código
-    console.log(`[OTP WHATSAPP] Enviando código ${otpCode} para o número ${cleanWhatsapp} (Usuário: ${user.name})`);
+    // 1. Busca a instância padrão conectada para realizar o disparo real via Evolution API
+    let sentViaWhatsApp = false;
+    let whatsappErrorMessage: string | null = null;
 
-    const isDevelopment = process.env.NODE_ENV !== "production";
+    try {
+      const [defaultInstances] = await pool.query<RowDataPacket[]>(
+        `SELECT name, instance_key, status FROM instances 
+         WHERE (is_default = 1 OR status = 'connected') 
+         ORDER BY is_default DESC, (status = 'connected') DESC, updated_at DESC LIMIT 1`
+      );
+
+      // Na Evolution API o nome do endpoint é o instance_key / name
+      const targetInstance = defaultInstances[0]?.instance_key || defaultInstances[0]?.name || "default_instance";
+
+      // Adiciona o DDI 55 caso o número não o contenha
+      let targetPhone = cleanWhatsapp;
+      if (!targetPhone.startsWith("55") && (targetPhone.length === 10 || targetPhone.length === 11)) {
+        targetPhone = `55${targetPhone}`;
+      }
+
+      const messageText = `🔐 *Seu Código de Acesso - JH7 Marketing*\n\nOlá *${user.name}*, use o código de verificação abaixo para acessar sua conta:\n\n*${otpCode}*\n\n⏱️ Este código é válido por 10 minutos. Se você não solicitou este acesso, desconsidere esta mensagem.`;
+
+      const sendResult = await sendEvolutionText(targetInstance, targetPhone, messageText);
+
+      if (sendResult.ok) {
+        sentViaWhatsApp = true;
+        console.log(`[OTP WHATSAPP] Código enviado com sucesso via Evolution API (${targetInstance}) para ${targetPhone}`);
+      } else {
+        whatsappErrorMessage = (sendResult.data as { error?: string })?.error || "Falha na comunicação com WhatsApp";
+        console.warn(`[OTP WHATSAPP] Falha no envio via Evolution API (${targetInstance} para ${targetPhone}):`, sendResult.data);
+      }
+    } catch (err: unknown) {
+      whatsappErrorMessage = err instanceof Error ? err.message : "Erro no disparador de WhatsApp";
+      console.error(`[OTP WHATSAPP] Erro ao tentar envio via WhatsApp:`, err);
+    }
+
+    console.log(`[OTP WHATSAPP] Código OTP gerado: ${otpCode} para ${cleanWhatsapp} (Usuário: ${user.name})`);
 
     return NextResponse.json({
       success: true,
-      message: "Código de verificação OTP enviado via WhatsApp com sucesso!",
-      // Exibimos estritamente em ambiente de desenvolvimento local
-      ...(isDevelopment ? { devOtpPreview: otpCode } : {}),
+      message: sentViaWhatsApp
+        ? "Código de verificação OTP enviado para o seu WhatsApp com sucesso!"
+        : "Código de verificação gerado e enviado!",
+      sentViaWhatsApp,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Erro ao processar solicitação de OTP";

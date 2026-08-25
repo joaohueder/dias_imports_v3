@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { DatabaseStatusIndicator } from "@/components/auth/DatabaseStatusIndicator";
 import { EvolutionStatusIndicator } from "@/components/auth/EvolutionStatusIndicator";
 import { WhatsappDefaultStatusIndicator } from "@/components/auth/WhatsappDefaultStatusIndicator";
+import { RedisStatusIndicator } from "@/components/auth/RedisStatusIndicator";
 import { SYSTEM_VERSION } from "@/lib/config";
 import { hasUserPermission, getModuleFromPath } from "@/lib/permissions";
 import { useLayout } from "@/context/LayoutContext";
@@ -819,6 +820,7 @@ export function SaLayoutClient({ children }: SaLayoutClientProps) {
 
           <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
             <DatabaseStatusIndicator />
+            <RedisStatusIndicator />
             <EvolutionStatusIndicator />
             <WhatsappDefaultStatusIndicator />
 

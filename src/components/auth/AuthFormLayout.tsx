@@ -59,6 +59,7 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
     e.preventDefault();
     setErrorMessage("");
     setSuccessMessage("");
+    console.log("[AUTH DEBUG] Iniciando envio do formulário de login:", { email, portalType: type });
     setIsLoading(true);
 
     try {
@@ -68,7 +69,12 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
         body: JSON.stringify({ email, password, portalType: type }),
       });
 
-      const data = await response.json();
+      console.log("[AUTH DEBUG] Resposta HTTP recebida:", response.status, response.statusText);
+      const data = await response.json().catch(err => {
+        console.error("[AUTH DEBUG] Erro ao decodificar JSON:", err);
+        return { success: false, message: "Resposta inválida do servidor." };
+      });
+      console.log("[AUTH DEBUG] Payload retornado:", data);
 
       if (!response.ok || !data.success) {
         setErrorMessage(data.message || "Falha na autenticação.");
@@ -76,9 +82,11 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
         return;
       }
 
-      router.push(data.redirectTo || "/sa");
-    } catch {
-      setErrorMessage("Erro ao conectar com o servidor. Verifique sua conexão.");
+      console.log("[AUTH DEBUG] Login efetuado com sucesso!", data);
+      window.location.href = data.redirectTo || "/sa";
+    } catch (err) {
+      console.error("[AUTH DEBUG] Exceção capturada ao tentar login:", err);
+      setErrorMessage("Erro ao conectar com o servidor. Verifique o console.");
       setIsLoading(false);
     }
   };
@@ -308,20 +316,6 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
               <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-start gap-2.5 text-emerald-400 text-xs animate-in fade-in">
                 <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
                 <div className="flex-1 font-medium">{successMessage}</div>
-              </div>
-            )}
-
-            {/* Dev OTP Preview helper (for instant testing) */}
-            {devOtpPreview && (
-              <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs flex items-center justify-between font-mono">
-                <span>Código OTP recebido: <strong>{devOtpPreview}</strong></span>
-                <button
-                  type="button"
-                  onClick={() => setOtpCode(devOtpPreview)}
-                  className="px-2 py-0.5 rounded bg-indigo-500/20 hover:bg-indigo-500/40 text-[11px] text-white"
-                >
-                  Preencher
-                </button>
               </div>
             )}
 
