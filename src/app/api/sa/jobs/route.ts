@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireSaPermission } from "@/lib/server-permissions";
+import { getDbPool } from "@/lib/db";
+import { RowDataPacket, ResultSetHeader } from "mysql2";
 
 export async function GET() {
   try {
@@ -8,101 +10,96 @@ export async function GET() {
       return auth.response;
     }
 
-    // Mock estruturado de Filas BullMQ e Tarefas do ecossistema
-    const queues = [
-      {
-        id: "q-messages-high",
-        name: "whatsapp-messages-high",
-        description: "Envio de OTP, notificações críticas e disparos prioritários",
-        waiting: 0,
-        active: 2,
-        completed: 18420,
-        failed: 4,
-        delayed: 0,
-        paused: false,
-      },
-      {
-        id: "q-messages-default",
-        name: "whatsapp-messages-default",
-        description: "Envio em massa e campanhas de marketing em grupos",
-        waiting: 14,
-        active: 8,
-        completed: 94250,
-        failed: 38,
-        delayed: 120,
-        paused: false,
-      },
-      {
-        id: "q-webhook-sync",
-        name: "evolution-webhook-sync",
-        description: "Sincronização de webhooks, status de entrega e leitura",
-        waiting: 1,
-        active: 3,
-        completed: 31200,
-        failed: 2,
-        delayed: 0,
-        paused: false,
-      },
-      {
-        id: "q-cron-subscriptions",
-        name: "cron-subscriptions",
-        description: "Verificação de vencimento de assinaturas e expirações",
-        waiting: 0,
-        active: 0,
-        completed: 1450,
-        failed: 0,
-        delayed: 1,
-        paused: false,
-      },
-    ];
+    const pool = getDbPool();
 
-    const recentJobs = [
-      {
-        id: "job-8921",
-        queue: "whatsapp-messages-high",
-        name: "send-otp-auth",
-        data: { phone: "5511999887766", template: "login_otp" },
-        status: "completed",
-        attempts: 1,
-        processedOn: new Date(Date.now() - 1000 * 30).toISOString(),
-        finishedOn: new Date(Date.now() - 1000 * 28).toISOString(),
-        duration_ms: 2150,
-      },
-      {
-        id: "job-8920",
-        queue: "whatsapp-messages-default",
-        name: "dispatch-campaign-message",
-        data: { campaignId: "camp_001", recipient: "5511988887777" },
-        status: "active",
-        attempts: 1,
-        processedOn: new Date(Date.now() - 1000 * 5).toISOString(),
-        finishedOn: null,
-        duration_ms: null,
-      },
-      {
-        id: "job-8919",
-        queue: "evolution-webhook-sync",
-        name: "sync-group-participants",
-        data: { groupId: "120363028392@g.us", count: 180 },
-        status: "completed",
-        attempts: 1,
-        processedOn: new Date(Date.now() - 1000 * 90).toISOString(),
-        finishedOn: new Date(Date.now() - 1000 * 88).toISOString(),
-        duration_ms: 1840,
-      },
-      {
-        id: "job-8918",
-        queue: "whatsapp-messages-default",
-        name: "dispatch-campaign-message",
-        data: { campaignId: "camp_001", recipient: "5511977776666" },
-        status: "failed",
-        attempts: 3,
-        failedReason: "Connection closed by peer / Timeout",
-        processedOn: new Date(Date.now() - 1000 * 300).toISOString(),
-        finishedOn: new Date(Date.now() - 1000 * 290).toISOString(),
-        duration_ms: 9800,
-      },
-    ];
+    // Garante que as tabelas de queues e jobs existam antes de consultar
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS queues (
+        id VARCHAR(64) PRIMARY KEY,
+        name VARCHAR(128) NOT NULL UNIQUE,
+        description TEXT NULL,
+        is_paused TINYINT(1) NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS background_jobs (
+        id VARCHAR(64) PRIMARY KEY,
+        queue_name VARCHAR(128) NOT NULL,
+        name VARCHAR(128) NOT NULL,
+        payload JSON NULL,
+        status ENUM('waiting', 'active', 'completed', 'failed', 'delayed') NOT NULL DEFAULT 'waiting',
+        attempts INT NOT NULL DEFAULT 0,
+        max_attempts INT NOT NULL DEFAULT 3,
+        failed_reason TEXT NULL,
+        duration_ms INT NULL,
+        processed_at DATETIME NULL,
+        finished_at DATETIME NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_queue_status (queue_name, status),
+        INDEX idx_status (status),
+        INDEX idx_created_at (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // Insere filas padrão se vazias
+    await pool.query(`
+      INSERT IGNORE INTO queues (id, name, description, is_paused) VALUES
+      ('q-messages-high', 'whatsapp-messages-high', 'Envio de OTP, autenticação e notificações críticas prioritárias', 0),
+      ('q-messages-default', 'whatsapp-messages-default', 'Disparos em massa de campanhas para grupos de WhatsApp com delay anti-ban', 0),
+      ('q-webhook-sync', 'evolution-webhook-sync', 'Sincronização de webhooks da Evolution API v2.3.7 e status de entrega', 0),
+      ('q-cron-subscriptions', 'cron-subscriptions', 'Rotinas periódicas de verificação de assinaturas e expirações', 0),
+      ('q-analytics', 'analytics-aggregation', 'Agregação analítica e consolidação de métricas do sistema', 0);
+    `);
+
+    // 1. Busca todas as filas cadastradas e métricas dinâmicas reais
+    const [queueRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT q.*, 
+        COUNT(CASE WHEN j.status = 'waiting' THEN 1 END) as \`waiting\`,
+        COUNT(CASE WHEN j.status = 'active' THEN 1 END) as \`active\`,
+        COUNT(CASE WHEN j.status = 'completed' THEN 1 END) as \`completed\`,
+        COUNT(CASE WHEN j.status = 'failed' THEN 1 END) as \`failed\`,
+        COUNT(CASE WHEN j.status = 'delayed' THEN 1 END) as \`delayed\`
+       FROM queues q
+       LEFT JOIN background_jobs j ON j.queue_name = q.name
+       GROUP BY q.id, q.name, q.description, q.is_paused, q.created_at, q.updated_at
+       ORDER BY q.created_at ASC`
+    );
+
+    // 2. Busca histórico das tarefas recentes persistidas
+    const [jobRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT * FROM background_jobs ORDER BY created_at DESC LIMIT 50`
+    );
+
+    const queues = queueRows.map((q) => ({
+      id: q.id,
+      name: q.name,
+      description: q.description || "",
+      waiting: Number(q.waiting || 0),
+      active: Number(q.active || 0),
+      completed: Number(q.completed || 0),
+      failed: Number(q.failed || 0),
+      delayed: Number(q.delayed || 0),
+      paused: Boolean(q.is_paused),
+    }));
+
+    const recentJobs = jobRows.map((j) => ({
+      id: j.id,
+      queue: j.queue_name,
+      name: j.name,
+      data: typeof j.payload === "string" ? JSON.parse(j.payload || "{}") : j.payload || {},
+      status: j.status,
+      attempts: j.attempts,
+      max_attempts: j.max_attempts,
+      failedReason: j.failed_reason,
+      duration_ms: j.duration_ms,
+      processedOn: j.processed_at,
+      finishedOn: j.finished_at,
+      createdAt: j.created_at,
+    }));
 
     const stats = {
       totalQueues: queues.length,
@@ -118,10 +115,75 @@ export async function GET() {
       recentJobs,
       stats,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro ao listar jobs da central de tarefas:", error);
     return NextResponse.json(
-      { error: "Erro interno ao processar requisição de tarefas" },
+      { error: error?.message || "Erro interno ao processar requisição de tarefas" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const auth = await requireSaPermission("jobs", "create");
+    if (!auth.authorized) {
+      return auth.response;
+    }
+
+    const body = await req.json();
+    const { action, jobId, queueName, jobName, payload } = body;
+
+    const pool = getDbPool();
+
+    // Reenfileirar / Retentar Job que falhou
+    if (action === "retry" && jobId) {
+      await pool.execute<ResultSetHeader>(
+        `UPDATE background_jobs 
+         SET status = 'waiting', failed_reason = NULL, duration_ms = NULL, processed_at = NULL, finished_at = NULL
+         WHERE id = ?`,
+        [jobId]
+      );
+
+      return NextResponse.json({
+        success: true,
+        message: `Tarefa #${jobId} reenfileirada para reprocessamento com sucesso.`,
+      });
+    }
+
+    // Criar nova tarefa teste / manual
+    if (action === "create" && queueName && jobName) {
+      const id = `job-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      await pool.execute<ResultSetHeader>(
+        `INSERT INTO background_jobs (id, queue_name, name, payload, status, attempts, max_attempts, created_at)
+         VALUES (?, ?, ?, ?, 'waiting', 0, 3, NOW())`,
+        [id, queueName, jobName, JSON.stringify(payload || {})]
+      );
+
+      return NextResponse.json({
+        success: true,
+        message: `Tarefa #${id} adicionada à fila '${queueName}' com sucesso.`,
+        jobId: id,
+      });
+    }
+
+    // Limpar tarefas concluídas
+    if (action === "purge_completed") {
+      await pool.execute<ResultSetHeader>(
+        `DELETE FROM background_jobs WHERE status = 'completed'`
+      );
+
+      return NextResponse.json({
+        success: true,
+        message: "Histórico de tarefas concluídas limpo com sucesso.",
+      });
+    }
+
+    return NextResponse.json({ error: "Ação não suportada" }, { status: 400 });
+  } catch (error) {
+    console.error("Erro na ação de tarefas:", error);
+    return NextResponse.json(
+      { error: "Erro interno ao processar ação na central de tarefas" },
       { status: 500 }
     );
   }

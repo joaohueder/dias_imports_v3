@@ -390,10 +390,10 @@ export default function SaSettingsPage() {
 
       {/* Barra Flutuante de Ações */}
       <FloatingActionBar
-        visible={isDirty}
+        isVisible={isDirty}
         onSave={handleSave}
         onCancel={handleCancel}
-        isSaving={isSubmitting}
+        isSubmitting={isSubmitting}
         saveLabel="Salvar Largura"
       />
     </div>

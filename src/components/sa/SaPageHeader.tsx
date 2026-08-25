@@ -4,10 +4,16 @@ import { RefreshCw, LucideIcon } from "lucide-react";
 interface SaPageHeaderProps {
   title: string;
   subtitle?: string;
+  description?: string;
   badge?: string;
+  badgeText?: string;
+  badgeVariant?: string;
+  statusBadge?: string;
+  statusType?: string;
   icon?: LucideIcon;
   onRefresh?: () => void;
   isRefreshing?: boolean;
+  loading?: boolean;
   refreshLabel?: string;
   primaryAction?: {
     label: string;
@@ -15,20 +21,30 @@ interface SaPageHeaderProps {
     onClick?: () => void;
     icon?: LucideIcon;
   };
+  actions?: React.ReactNode;
   extraActions?: React.ReactNode;
 }
 
 export function SaPageHeader({
   title,
   subtitle,
+  description,
   badge,
+  badgeText,
+  statusBadge,
   icon: Icon,
   onRefresh,
   isRefreshing = false,
+  loading = false,
   refreshLabel = "Atualizar",
   primaryAction,
+  actions,
   extraActions,
 }: SaPageHeaderProps) {
+  const displaySubtitle = subtitle || description;
+  const displayBadge = badge || badgeText || statusBadge;
+  const isCurrentlyRefreshing = isRefreshing || loading;
+  const allExtraActions = extraActions || actions;
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
       <div>
@@ -41,30 +57,30 @@ export function SaPageHeader({
           <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
             {title}
           </h1>
-          {badge && (
-            <span className="relative flex h-3 w-3" title={badge}>
+          {displayBadge && (
+            <span className="relative flex h-3 w-3" title={displayBadge}>
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
             </span>
           )}
         </div>
-        {subtitle && (
+        {displaySubtitle && (
           <p className="text-xs text-slate-400 mt-1 max-w-3xl leading-relaxed">
-            {subtitle}
+            {displaySubtitle}
           </p>
         )}
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
-        {extraActions}
+        {allExtraActions}
 
         {onRefresh && (
           <button
             onClick={onRefresh}
-            disabled={isRefreshing}
+            disabled={isCurrentlyRefreshing}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all focus:outline-none disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
           >
-            <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isRefreshing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isCurrentlyRefreshing ? "animate-spin" : ""}`} />
             <span className="whitespace-nowrap">{refreshLabel}</span>
           </button>
         )}

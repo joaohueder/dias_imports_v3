@@ -2,13 +2,24 @@ import { NextResponse } from "next/server";
 import { getCurrentSaUser } from "@/lib/session";
 import { hasUserPermission } from "@/lib/permissions";
 
+export type SaPermissionResult =
+  | {
+      authorized: true;
+      user: NonNullable<Awaited<ReturnType<typeof getCurrentSaUser>>>;
+    }
+  | {
+      authorized: false;
+      response: NextResponse;
+      user: null | Awaited<ReturnType<typeof getCurrentSaUser>>;
+    };
+
 /**
  * Valida a sessão do usuário e suas permissões para requisições de API no Super Admin (Server-side)
  */
 export async function requireSaPermission(
   moduleId: string,
   action: "view" | "create" | "edit" | "delete" = "view"
-) {
+): Promise<SaPermissionResult> {
   const user = await getCurrentSaUser();
 
   if (!user) {
@@ -36,7 +47,6 @@ export async function requireSaPermission(
 
   return {
     authorized: true,
-    response: null,
     user,
   };
 }

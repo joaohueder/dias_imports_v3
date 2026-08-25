@@ -11,6 +11,9 @@ import {
   RotateCw,
   Server,
   Activity,
+  Plus,
+  Trash2,
+  Send,
 } from "lucide-react";
 import { SaPageHeader } from "@/components/sa/SaPageHeader";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
@@ -34,10 +37,12 @@ interface JobItem {
   data: Record<string, unknown>;
   status: "completed" | "active" | "failed" | "delayed" | "waiting";
   attempts: number;
+  max_attempts: number;
   failedReason?: string;
   processedOn?: string;
   finishedOn?: string | null;
   duration_ms?: number | null;
+  createdAt: string;
 }
 
 interface JobStats {
@@ -55,8 +60,15 @@ export default function SaJobsPage() {
   const [stats, setStats] = useState<JobStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const { showError } = useFeedbackModal();
+  // Modal para enfileirar nova tarefa de teste/produção
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedQueue, setSelectedQueue] = useState("whatsapp-messages-high");
+  const [jobName, setJobName] = useState("dispatch-test-message");
+  const [payloadText, setPayloadText] = useState('{\n  "recipient": "5511999999999",\n  "message": "Teste de envio via fila"\n}');
+
+  const { showError, showSuccess } = useFeedbackModal();
 
   const fetchJobsData = useCallback(async () => {
     try {
@@ -93,6 +105,82 @@ export default function SaJobsPage() {
     return () => clearInterval(interval);
   }, [autoRefresh, fetchJobsData]);
 
+  const handleRetryJob = async (jobId: string) => {
+    setActionLoading(jobId);
+    try {
+      const res = await fetch("/api/sa/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "retry", jobId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao retentar tarefa");
+      showSuccess(data.message || "Tarefa reenfileirada com sucesso!", "Job Reenfileirado");
+      await fetchJobsData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro na operação";
+      showError(msg, "Falha ao Retentar");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handlePurgeCompleted = async () => {
+    setActionLoading("purge");
+    try {
+      const res = await fetch("/api/sa/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "purge_completed" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao limpar histórico");
+      showSuccess(data.message || "Histórico limpo com sucesso!", "Tarefas Limpas");
+      await fetchJobsData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro na operação";
+      showError(msg, "Falha ao Limpar");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleCreateJob = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionLoading("create");
+    try {
+      let parsedPayload = {};
+      if (payloadText.trim()) {
+        try {
+          parsedPayload = JSON.parse(payloadText);
+        } catch {
+          throw new Error("O Payload fornecido não é um JSON válido.");
+        }
+      }
+
+      const res = await fetch("/api/sa/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          queueName: selectedQueue,
+          jobName,
+          payload: parsedPayload,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao enfileirar tarefa");
+      showSuccess(data.message || "Tarefa criada com sucesso!", "Nova Tarefa Enfileirada");
+      setIsCreateModalOpen(false);
+      await fetchJobsData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro na criação";
+      showError(msg, "Falha ao Criar Tarefa");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300 pb-10">
       {/* 1. CABEÇALHO PADRONIZADO */}
@@ -104,18 +192,40 @@ export default function SaJobsPage() {
         isRefreshing={loading}
         refreshLabel="Atualizar Tarefas"
         extraActions={
-          <button
-            type="button"
-            onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-              autoRefresh
-                ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
-                : "bg-slate-900 text-slate-400 border-slate-800"
-            }`}
-          >
-            <Activity className={`w-3.5 h-3.5 shrink-0 ${autoRefresh ? "animate-pulse text-emerald-400" : ""}`} />
-            <span className="whitespace-nowrap">{autoRefresh ? "Auto Sync (5s)" : "Sync Pausado"}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsCreateModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 shrink-0" />
+              <span className="whitespace-nowrap">Nova Tarefa</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePurgeCompleted}
+              disabled={actionLoading === "purge"}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition-all whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-50"
+              title="Limpar tarefas com status concluído"
+            >
+              <Trash2 className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+              <span className="whitespace-nowrap">Limpar Concluídas</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                autoRefresh
+                  ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                  : "bg-slate-900 text-slate-400 border-slate-800"
+              }`}
+            >
+              <Activity className={`w-3.5 h-3.5 shrink-0 ${autoRefresh ? "animate-pulse text-emerald-400" : ""}`} />
+              <span className="whitespace-nowrap">{autoRefresh ? "Auto Sync (5s)" : "Sync Pausado"}</span>
+            </button>
+          </div>
         }
       />
 
@@ -188,10 +298,10 @@ export default function SaJobsPage() {
           <div>
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <Layers className="w-4 h-4 text-indigo-400" />
-              Filas do Ecossistema
+              Filas do Ecossistema (Persistência & BullMQ)
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Tópicos de processamento assíncrono gerenciados pelo Redis e BullMQ.
+              Tópicos de processamento assíncrono sincronizados no banco de dados e gerenciados pelos Workers.
             </p>
           </div>
         </div>
@@ -246,92 +356,217 @@ export default function SaJobsPage() {
         <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <RotateCw className="w-4 h-4 text-indigo-400" />
-            Execuções Recentes & Histórico
+            Execuções Recentes & Histórico Persistido
           </h3>
+          <span className="text-xs text-slate-400 font-mono">
+            {jobs.length} tarefas listadas
+          </span>
         </div>
 
         <div className="w-full overflow-hidden">
-          <table className="w-full text-left text-xs table-auto">
-            <thead className="bg-[#0b1222] border-b border-slate-800/90 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
-              <tr>
-                <th className="pl-6 pr-4 py-3.5 whitespace-nowrap">ID / Tarefa</th>
-                <th className="px-4 py-3.5 whitespace-nowrap">Fila</th>
-                <th className="px-4 py-3.5 whitespace-nowrap">Payload / Parâmetros</th>
-                <th className="px-4 py-3.5 whitespace-nowrap">Tentativas</th>
-                <th className="px-4 py-3.5 whitespace-nowrap">Duração</th>
-                <th className="pl-4 pr-6 py-3.5 text-right whitespace-nowrap">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {jobs.map((job) => {
-                const isCompleted = job.status === "completed";
-                const isActive = job.status === "active";
-                const isFailed = job.status === "failed";
+          {jobs.length === 0 ? (
+            <div className="py-16 text-center text-slate-400 space-y-2">
+              <Layers className="w-8 h-8 mx-auto text-slate-600" />
+              <p className="text-xs">Nenhuma tarefa registrada no histórico no momento.</p>
+            </div>
+          ) : (
+            <table className="w-full text-left text-xs table-auto">
+              <thead className="bg-[#0b1222] border-b border-slate-800/90 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="pl-6 pr-4 py-3.5 whitespace-nowrap">ID / Tarefa</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">Fila</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">Payload / Parâmetros</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">Tentativas</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">Duração</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">Status</th>
+                  <th className="pl-4 pr-6 py-3.5 text-right whitespace-nowrap">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {jobs.map((job) => {
+                  const isCompleted = job.status === "completed";
+                  const isActive = job.status === "active";
+                  const isFailed = job.status === "failed";
+                  const isWaiting = job.status === "waiting";
 
-                return (
-                  <tr key={job.id} className="hover:bg-slate-900/40 transition-colors">
-                    {/* ID / Tarefa */}
-                    <td className="pl-6 pr-4 py-3.5">
-                      <div className="font-mono text-xs font-bold text-white leading-tight">
-                        {job.name}
-                      </div>
-                      <div className="text-[10px] font-mono text-slate-500 mt-0.5">
-                        #{job.id}
-                      </div>
-                    </td>
+                  return (
+                    <tr key={job.id} className="hover:bg-slate-900/40 transition-colors">
+                      {/* ID / Tarefa */}
+                      <td className="pl-6 pr-4 py-3.5">
+                        <div className="font-mono text-xs font-bold text-white leading-tight">
+                          {job.name}
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+                          #{job.id}
+                        </div>
+                      </td>
 
-                    {/* Fila */}
-                    <td className="px-4 py-3.5">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-950/80 border border-slate-800 font-mono text-[10px] text-indigo-300 whitespace-nowrap">
-                        {job.queue}
-                      </span>
-                    </td>
-
-                    {/* Payload */}
-                    <td className="px-4 py-3.5 font-mono text-[11px] text-slate-400 max-w-[220px] truncate">
-                      {JSON.stringify(job.data)}
-                    </td>
-
-                    {/* Tentativas */}
-                    <td className="px-4 py-3.5 font-mono text-xs text-white">
-                      {job.attempts}x
-                    </td>
-
-                    {/* Duração */}
-                    <td className="px-4 py-3.5 font-mono text-xs text-slate-300">
-                      {job.duration_ms ? `${job.duration_ms} ms` : "--"}
-                    </td>
-
-                    {/* Status */}
-                    <td className="pl-4 pr-6 py-3.5 text-right whitespace-nowrap">
-                      {isCompleted ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap">
-                          <CheckCircle2 className="w-3 h-3 shrink-0" />
-                          Concluído
+                      {/* Fila */}
+                      <td className="px-4 py-3.5">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-950/80 border border-slate-800 font-mono text-[10px] text-indigo-300 whitespace-nowrap">
+                          {job.queue}
                         </span>
-                      ) : isActive ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 whitespace-nowrap">
-                          <RotateCw className="w-3 h-3 animate-spin shrink-0" />
-                          Processando
-                        </span>
-                      ) : isFailed ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30 whitespace-nowrap" title={job.failedReason}>
-                          <XCircle className="w-3 h-3 shrink-0" />
-                          Falhou
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-slate-500/15 text-slate-400 border border-slate-500/30 whitespace-nowrap">
-                          Pendente
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+
+                      {/* Payload */}
+                      <td className="px-4 py-3.5 font-mono text-[11px] text-slate-400 max-w-[220px] truncate" title={JSON.stringify(job.data)}>
+                        {JSON.stringify(job.data)}
+                      </td>
+
+                      {/* Tentativas */}
+                      <td className="px-4 py-3.5 font-mono text-xs text-white">
+                        {job.attempts} / {job.max_attempts || 3}
+                      </td>
+
+                      {/* Duração */}
+                      <td className="px-4 py-3.5 font-mono text-xs text-slate-300">
+                        {job.duration_ms ? `${job.duration_ms} ms` : "--"}
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        {isCompleted ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap">
+                            <CheckCircle2 className="w-3 h-3 shrink-0" />
+                            Concluído
+                          </span>
+                        ) : isActive ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 whitespace-nowrap">
+                            <RotateCw className="w-3 h-3 animate-spin shrink-0" />
+                            Processando
+                          </span>
+                        ) : isFailed ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30 whitespace-nowrap" title={job.failedReason}>
+                            <XCircle className="w-3 h-3 shrink-0" />
+                            Falhou
+                          </span>
+                        ) : isWaiting ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30 whitespace-nowrap">
+                            <Clock className="w-3 h-3 shrink-0" />
+                            Aguardando
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-slate-500/15 text-slate-400 border border-slate-500/30 whitespace-nowrap">
+                            Pendente
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Ações */}
+                      <td className="pl-4 pr-6 py-3.5 text-right whitespace-nowrap">
+                        {isFailed && (
+                          <button
+                            type="button"
+                            onClick={() => handleRetryJob(job.id)}
+                            disabled={actionLoading === job.id}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition-all cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-50"
+                            title="Retentar execução da tarefa"
+                          >
+                            <RotateCw className={`w-3.5 h-3.5 shrink-0 ${actionLoading === job.id ? "animate-spin" : ""}`} />
+                            <span className="whitespace-nowrap">Retentar</span>
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
+
+      {/* 5. MODAL DE CRIAÇÃO MANUAL DE TAREFA */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Send className="w-4 h-4 text-indigo-400" />
+                Enfileirar Nova Tarefa
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsCreateModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateJob} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Fila de Destino
+                </label>
+                <select
+                  value={selectedQueue}
+                  onChange={(e) => setSelectedQueue(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-indigo-500"
+                >
+                  {queues.map((q) => (
+                    <option key={q.id} value={q.name}>
+                      {q.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Identificador / Nome do Job
+                </label>
+                <input
+                  type="text"
+                  value={jobName}
+                  onChange={(e) => setJobName(e.target.value)}
+                  required
+                  placeholder="Ex: send-otp-auth"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Payload (JSON)
+                </label>
+                <textarea
+                  rows={4}
+                  value={payloadText}
+                  onChange={(e) => setPayloadText(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-indigo-500 font-mono text-[11px]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateModalOpen(false)}
+                  disabled={actionLoading !== null}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={actionLoading !== null}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 transition-all cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-50"
+                >
+                  {actionLoading === "create" ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+                      <span className="whitespace-nowrap">Enfileirando...</span>
+                    </>
+                  ) : (
+                    <span className="whitespace-nowrap">Adicionar à Fila</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

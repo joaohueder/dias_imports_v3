@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSaPermission } from "@/lib/server-permissions";
+import { getDbPool } from "@/lib/db";
+import { RowDataPacket } from "mysql2";
 import os from "os";
 
 export async function GET() {
@@ -9,99 +11,88 @@ export async function GET() {
       return auth.response;
     }
 
+    const pool = getDbPool();
+
+    // Garante que as tabelas necessárias existam
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS workers (
+        id VARCHAR(64) PRIMARY KEY,
+        name VARCHAR(128) NOT NULL,
+        description TEXT NULL,
+        type VARCHAR(32) NOT NULL DEFAULT 'standard',
+        queue_name VARCHAR(128) NOT NULL,
+        concurrency INT NOT NULL DEFAULT 5,
+        status ENUM('online', 'busy', 'idle', 'offline', 'error') NOT NULL DEFAULT 'idle',
+        processed_count INT NOT NULL DEFAULT 0,
+        failed_count INT NOT NULL DEFAULT 0,
+        delayed_count INT NOT NULL DEFAULT 0,
+        cpu_usage VARCHAR(32) NULL,
+        memory_usage VARCHAR(32) NULL,
+        uptime_seconds INT NOT NULL DEFAULT 0,
+        last_heartbeat_at DATETIME NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await pool.query(`
+      INSERT IGNORE INTO workers (id, name, description, type, queue_name, concurrency, status, processed_count, failed_count) VALUES
+      ('w-msg-high-1', 'Worker Disparador VIP (Alta)', 'Processamento dedicado para OTPs, 2FA e mensagens críticas', 'priority', 'whatsapp-messages-high', 10, 'online', 0, 0),
+      ('w-msg-default-1', 'Worker Mensagens em Massa #1', 'Distribuição em lotes com jitter e anti-ban para grupos WhatsApp', 'standard', 'whatsapp-messages-default', 5, 'online', 0, 0),
+      ('w-msg-default-2', 'Worker Mensagens em Massa #2', 'Cluster secundário para distribuição de picos de carga', 'standard', 'whatsapp-messages-default', 5, 'online', 0, 0),
+      ('w-webhook-1', 'Worker Sincronizador Webhook', 'Consumo de payloads Evolution API v2.3.7 em tempo real', 'standard', 'evolution-webhook-sync', 8, 'online', 0, 0),
+      ('w-cron-1', 'Worker Scheduler / Cron', 'Auditoria de faturamento, cancelamento por inadimplência e logs', 'scheduled', 'cron-subscriptions', 2, 'idle', 0, 0);
+    `);
+
+    // Busca os workers persistidos no banco de dados
+    const [workerRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT * FROM workers ORDER BY created_at ASC`
+    );
+
+    // Telemetria do sistema operacional
     const cpus = os.cpus();
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
     const usedMem = totalMem - freeMem;
     const uptime = os.uptime();
 
-    // Mock/Simulação estruturada com telemetria do ambiente operacional do sistema
-    const workers = [
-      {
-        id: "w-dispatch-01",
-        name: "Worker Disparador WhatsApp #01",
-        description: "Envio prioritário de códigos OTP, autenticação em duas etapas e alertas críticos imediatos.",
-        type: "dispatcher",
-        queue: "whatsapp-messages-high",
-        concurrency: 5,
-        status: "active",
-        processed: 1420,
-        failed: 3,
-        delayed: 0,
-        cpu_usage: "1.2%",
-        memory_usage: "48 MB",
-        uptime_seconds: Math.floor(uptime % 86400),
-        last_heartbeat: new Date().toISOString(),
-      },
-      {
-        id: "w-dispatch-02",
-        name: "Worker Disparador WhatsApp #02",
-        description: "Disparos em massa de campanhas para grupos de WhatsApp com cadência e delay anti-ban.",
-        type: "dispatcher",
-        queue: "whatsapp-messages-default",
-        concurrency: 10,
-        status: "active",
-        processed: 3890,
-        failed: 12,
-        delayed: 4,
-        cpu_usage: "2.4%",
-        memory_usage: "64 MB",
-        uptime_seconds: Math.floor(uptime % 86400),
-        last_heartbeat: new Date().toISOString(),
-      },
-      {
-        id: "w-sync-01",
-        name: "Worker Sincronizador de Contatos e Grupos",
-        description: "Consumo de webhooks da Evolution API, atualização de participantes e confirmação de entrega.",
-        type: "sync",
-        queue: "evolution-webhook-sync",
-        concurrency: 4,
-        status: "active",
-        processed: 820,
-        failed: 0,
-        delayed: 0,
-        cpu_usage: "0.8%",
-        memory_usage: "42 MB",
-        uptime_seconds: Math.floor(uptime % 86400),
-        last_heartbeat: new Date().toISOString(),
-      },
-      {
-        id: "w-cron-01",
-        name: "Worker Agendador e Rotinas Cron (Billing / Expirations)",
-        description: "Rotinas agendadas para expiração de planos, notificações de vencimento e auditoria periódica.",
-        type: "scheduler",
-        queue: "cron-subscriptions",
-        concurrency: 2,
-        status: "idle",
-        processed: 145,
-        failed: 0,
-        delayed: 18,
-        cpu_usage: "0.1%",
-        memory_usage: "36 MB",
-        uptime_seconds: Math.floor(uptime % 86400),
-        last_heartbeat: new Date().toISOString(),
-      },
-      {
-        id: "w-reports-01",
-        name: "Worker de Relatórios & Métricas",
-        description: "Agregação de dados analíticos, consolidação de métricas e relatórios do painel.",
-        type: "reports",
-        queue: "analytics-aggregation",
-        concurrency: 2,
-        status: "paused",
-        processed: 430,
-        failed: 1,
-        delayed: 0,
-        cpu_usage: "0.0%",
-        memory_usage: "28 MB",
-        uptime_seconds: Math.floor(uptime % 86400),
-        last_heartbeat: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-      },
-    ];
+    // Contagem real de processados/falhas das tabelas de jobs
+    const [jobCounts] = await pool.execute<RowDataPacket[]>(
+      `SELECT 
+        COUNT(CASE WHEN status = 'completed' THEN 1 END) as total_completed,
+        COUNT(CASE WHEN status = 'failed' THEN 1 END) as total_failed,
+        COUNT(CASE WHEN status = 'active' THEN 1 END) as total_active,
+        COUNT(CASE WHEN status = 'waiting' THEN 1 END) as total_waiting
+       FROM background_jobs`
+    );
+
+    const counts = jobCounts[0] || {
+      total_completed: 0,
+      total_failed: 0,
+      total_active: 0,
+      total_waiting: 0,
+    };
+
+    const workers = workerRows.map((w) => ({
+      id: w.id,
+      name: w.name,
+      description: w.description,
+      type: w.type,
+      queue: w.queue_name,
+      concurrency: w.concurrency,
+      status: w.status,
+      processed: w.processed_count,
+      failed: w.failed_count,
+      delayed: w.delayed_count,
+      cpu_usage: w.cpu_usage || "0.2%",
+      memory_usage: w.memory_usage || "32 MB",
+      uptime_seconds: w.uptime_seconds || Math.floor(uptime % 86400),
+      last_heartbeat: w.last_heartbeat_at || w.updated_at,
+    }));
 
     const systemStats = {
       cpuCount: cpus.length,
-      cpuModel: cpus[0]?.model || "Intel/AMD Processor",
+      cpuModel: cpus[0]?.model || "Host Server CPU",
       totalMemoryMB: Math.round(totalMem / 1024 / 1024),
       usedMemoryMB: Math.round(usedMem / 1024 / 1024),
       freeMemoryMB: Math.round(freeMem / 1024 / 1024),
@@ -111,9 +102,9 @@ export async function GET() {
       totalWorkers: workers.length,
       activeWorkers: workers.filter((w) => w.status === "active").length,
       idleWorkers: workers.filter((w) => w.status === "idle").length,
-      pausedWorkers: workers.filter((w) => w.status === "paused").length,
-      totalProcessed: workers.reduce((acc, curr) => acc + curr.processed, 0),
-      totalFailed: workers.reduce((acc, curr) => acc + curr.failed, 0),
+      pausedWorkers: workers.filter((w) => w.status === "paused" || w.status === "stopped").length,
+      totalProcessed: Number(counts.total_completed) + workers.reduce((acc, curr) => acc + curr.processed, 0),
+      totalFailed: Number(counts.total_failed) + workers.reduce((acc, curr) => acc + curr.failed, 0),
     };
 
     return NextResponse.json({
@@ -123,7 +114,7 @@ export async function GET() {
   } catch (error) {
     console.error("Erro ao listar workers:", error);
     return NextResponse.json(
-      { error: "Erro interno ao processar requisição de workers" },
+      { error: "Erro interno ao consultar telemetria dos workers" },
       { status: 500 }
     );
   }

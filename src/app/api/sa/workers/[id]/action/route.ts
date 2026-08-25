@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSaPermission } from "@/lib/server-permissions";
+import { getDbPool } from "@/lib/db";
 
 export async function POST(
   req: NextRequest,
@@ -19,12 +20,22 @@ export async function POST(
       return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
     }
 
-    // Simulação de execução com feedback de sucesso
+    const pool = getDbPool();
+    const newStatus = action === "start" ? "active" : action === "pause" ? "paused" : "active";
+
+    // Atualiza o estado real do worker no banco de dados
+    await pool.execute(
+      `UPDATE workers 
+       SET status = ?, last_heartbeat_at = NOW(), uptime_seconds = CASE WHEN ? = 'restart' THEN 0 ELSE uptime_seconds END
+       WHERE id = ?`,
+      [newStatus, action, id]
+    );
+
     return NextResponse.json({
       success: true,
-      message: `Comando '${action}' enviado com sucesso para o worker '${id}'.`,
+      message: `Comando '${action}' aplicado com sucesso ao worker '${id}'.`,
       workerId: id,
-      action,
+      status: newStatus,
       updatedAt: new Date().toISOString(),
     });
   } catch (error) {

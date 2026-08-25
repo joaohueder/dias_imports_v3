@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -203,9 +203,9 @@ export default function NewSaUserPage() {
 
   const isFormInvalid = useMemo(() => {
     if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim()) return true;
-    if (errors.name || errors.email || errors.whatsapp || errors.password) return true;
+    if (emailStatus.available === false) return true;
     return false;
-  }, [formData, errors]);
+  }, [formData, emailStatus]);
 
   return (
     <div className="space-y-8 pb-24">
