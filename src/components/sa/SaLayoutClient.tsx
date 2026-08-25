@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { DatabaseStatusIndicator } from "@/components/auth/DatabaseStatusIndicator";
+import { MigrationStatusIndicator } from "@/components/sa/MigrationStatusIndicator";
+import { SYSTEM_VERSION } from "@/lib/config";
 
 interface SaLayoutClientProps {
   children: React.ReactNode;
@@ -44,8 +46,9 @@ const navigationItems = [
   {
     category: "Governança & Tenants",
     items: [
-      { name: "Empresas (Tenants)", href: "/sa/tenants", icon: Building2, badge: "1" },
-      { name: "Planos & Assinaturas", href: "/sa/plans", icon: Layers, badge: null },
+      { name: "Empresas", href: "/sa/companies", icon: Building2, badge: null },
+      { name: "Planos", href: "/sa/plans", icon: Layers, badge: null },
+      { name: "Assinaturas", href: "/sa/subscriptions", icon: Zap, badge: null },
       { name: "Super Admins", href: "/sa/users", icon: Users, badge: null },
     ],
   },
@@ -424,11 +427,12 @@ export function SaLayoutClient({ children }: SaLayoutClientProps) {
         </div>
 
         <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+          <MigrationStatusIndicator />
           <DatabaseStatusIndicator />
 
           <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-[11px] font-mono text-indigo-300">
             <Zap className="w-3 h-3 text-amber-400" />
-            v2026.08.0004
+            v{SYSTEM_VERSION}
           </span>
           <span className="text-[11px] text-slate-400 hidden md:inline">
             © 2026 Todos os direitos reservados

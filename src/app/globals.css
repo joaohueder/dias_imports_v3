@@ -24,3 +24,58 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Efeito Sonar Radar para Migrations Pendentes */
+@keyframes sonar-wave {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.9;
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.75);
+  }
+  50% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(2.8);
+    opacity: 0;
+    box-shadow: 0 0 45px 35px rgba(245, 158, 11, 0);
+  }
+}
+
+@keyframes sonar-wave-wide {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(4.5);
+    opacity: 0;
+  }
+}
+
+@keyframes sonar-beam {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-sonar-1 {
+  animation: sonar-wave 2.4s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+
+.animate-sonar-2 {
+  animation: sonar-wave 2.4s cubic-bezier(0, 0.2, 0.8, 1) infinite 0.8s;
+}
+
+.animate-sonar-3 {
+  animation: sonar-wave-wide 3.2s cubic-bezier(0, 0.2, 0.8, 1) infinite 1.6s;
+}
+
+.animate-sonar-beam {
+  animation: sonar-beam 4s linear infinite;
+  transform-origin: center;
+}
+

@@ -19,10 +19,16 @@ import {
   Layers,
   Server,
   Users2,
-  AlertCircle
+  AlertCircle,
+  Smartphone,
+  KeyRound,
+  RefreshCw,
+  CheckCircle2
 } from "lucide-react";
 import { AnimatedBackground } from "./AnimatedBackground";
 import { DatabaseStatusIndicator } from "./DatabaseStatusIndicator";
+import { maskPhone } from "@/lib/validators";
+import { SYSTEM_VERSION } from "@/lib/config";
 
 interface AuthLayoutProps {
   type: "sa" | "painel";
@@ -30,17 +36,29 @@ interface AuthLayoutProps {
 
 export function AuthFormLayout({ type }: AuthLayoutProps) {
   const router = useRouter();
+  
+  // Super Admin Form State (E-mail + Senha)
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Painel Empresa Form State (WhatsApp + OTP 6 dígitos)
+  const [whatsapp, setWhatsapp] = useState("");
+  const [otpStep, setOtpStep] = useState<"whatsapp" | "code">("whatsapp");
+  const [otpCode, setOtpCode] = useState("");
+  const [devOtpPreview, setDevOtpPreview] = useState<string | null>(null);
+
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const isSaas = type === "sa";
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Login Super Admin (E-mail e Senha)
+  const handleSaasSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
+    setSuccessMessage("");
     setIsLoading(true);
 
     try {
@@ -58,12 +76,98 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
         return;
       }
 
-      // Redireciona conforme o papel do usuário
-      router.push(data.redirectTo);
+      router.push(data.redirectTo || "/sa");
     } catch {
       setErrorMessage("Erro ao conectar com o servidor. Verifique sua conexão.");
       setIsLoading(false);
     }
+  };
+
+  // Solicitar envio do código OTP via WhatsApp
+  const handleRequestOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
+    
+    const cleanWa = whatsapp.replace(/\D/g, "");
+    if (cleanWa.length < 10) {
+      setErrorMessage("Informe um número de WhatsApp válido com DDD.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ whatsapp }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setErrorMessage(data.message || "Não foi possível enviar o código OTP.");
+        setIsLoading(false);
+        return;
+      }
+
+      setOtpStep("code");
+      setSuccessMessage(data.message || "Código enviado com sucesso via WhatsApp!");
+      if (data.devOtpPreview) {
+        setDevOtpPreview(data.devOtpPreview);
+      }
+    } catch {
+      setErrorMessage("Erro ao solicitar código de verificação.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Validar código OTP e autenticar
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    if (otpCode.trim().length !== 6) {
+      setErrorMessage("Digite o código de verificação de 6 dígitos.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ whatsapp, code: otpCode }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setErrorMessage(data.message || "Código incorreto ou expirado.");
+        setIsLoading(false);
+        return;
+      }
+
+      router.push(data.redirectTo || "/painel");
+    } catch {
+      setErrorMessage("Erro de conexão ao validar o código.");
+      setIsLoading(false);
+    }
+  };
+
+  const handleWhatsappChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setWhatsapp(maskPhone(e.target.value));
+    if (errorMessage) setErrorMessage("");
+  };
+
+  const handleOtpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+    setOtpCode(val);
+    if (errorMessage) setErrorMessage("");
   };
 
   return (
@@ -118,265 +222,301 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
 
             {/* Main Value Proposition */}
             <div className="mt-10 space-y-4">
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/60 text-xs text-slate-300">
+                <Sparkles className={`w-3.5 h-3.5 ${isSaas ? "text-indigo-400" : "text-emerald-400"}`} />
+                <span>{isSaas ? "Console Master de Infraestrutura" : "Automação Segura via OTP WhatsApp"}</span>
+              </div>
+              
+              <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight tracking-tight">
                 {isSaas ? (
-                  <>
-                    Controle total do ecossistema <span className="bg-gradient-to-r from-indigo-400 via-violet-300 to-purple-400 bg-clip-text text-transparent">SaaS Multi-Tenant</span>
-                  </>
+                  <>Controle completo sobre o ecossistema SaaS.</>
                 ) : (
-                  <>
-                    Potencialize suas vendas automáticas em <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">Grupos de WhatsApp</span>
-                  </>
+                  <>Acesso sem senhas, seguro e direto no seu WhatsApp.</>
                 )}
               </h2>
-              <p className="text-sm text-slate-400 leading-relaxed">
+              
+              <p className="text-slate-400 text-sm leading-relaxed">
                 {isSaas 
-                  ? "Gerencie tenants, instâncias de WhatsApp, planos, monitoramento de saúde do sistema e métricas em tempo real em um único painel administrativo central."
-                  : "Automatize ofertas, disparos inteligentes, rotatividade anti-bloqueio e gere leads qualificados através dos grupos mais lucrativos da sua operação."}
+                  ? "Gerencie tenants, instâncias de WhatsApp, filas em tempo real e parâmetros globais do servidor com governança centralizada."
+                  : "Digite seu número de WhatsApp corporativo cadastrado para receber instantaneamente um código de uso único (OTP) de 6 dígitos."}
               </p>
+            </div>
 
-              {/* Feature Highlights Grid */}
-              <div className="pt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {isSaas ? (
-                  <>
-                    <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/40">
-                      <Layers className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="text-xs font-semibold text-slate-200">Multi-Empresas</h4>
-                        <p className="text-[11px] text-slate-400">Isolamento seguro de dados</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/40">
-                      <Server className="w-5 h-5 text-violet-400 shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="text-xs font-semibold text-slate-200">Instâncias & Filas</h4>
-                        <p className="text-[11px] text-slate-400">BullMQ & Redis otimizados</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/40">
-                      <Users2 className="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="text-xs font-semibold text-slate-200">Gestão de Contas</h4>
-                        <p className="text-[11px] text-slate-400">Supervisão de assinantes</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/40">
-                      <Zap className="w-5 h-5 text-pink-400 shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="text-xs font-semibold text-slate-200">Painel Operacional</h4>
-                        <p className="text-[11px] text-slate-400">Métricas em tempo real</p>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/40">
-                      <Bot className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="text-xs font-semibold text-slate-200">Automação de Ofertas</h4>
-                        <p className="text-[11px] text-slate-400">Disparos programados e loops</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/40">
-                      <Sparkles className="w-5 h-5 text-teal-400 shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="text-xs font-semibold text-slate-200">Gestão de Grupos</h4>
-                        <p className="text-[11px] text-slate-400">Organização e segmentação</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/40">
-                      <Zap className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="text-xs font-semibold text-slate-200">Alta Velocidade</h4>
-                        <p className="text-[11px] text-slate-400">Envios com filas prioritárias</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/40">
-                      <ShieldCheck className="w-5 h-5 text-teal-400 shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="text-xs font-semibold text-slate-200">Anti-Bloqueio</h4>
-                        <p className="text-[11px] text-slate-400">Proteção e rotação de envios</p>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
+            {/* Feature Badges */}
+            <div className="mt-8 grid grid-cols-2 gap-3">
+              {isSaas ? (
+                <>
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-800/40 border border-slate-800 text-xs text-slate-300">
+                    <Server className="w-4 h-4 text-indigo-400 shrink-0" />
+                    <span>Monitoramento Realtime</span>
+                  </div>
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-800/40 border border-slate-800 text-xs text-slate-300">
+                    <Building2 className="w-4 h-4 text-indigo-400 shrink-0" />
+                    <span>Multi-Tenancy Isolado</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-800/40 border border-slate-800 text-xs text-slate-300">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Autenticação OTP 100% Segura</span>
+                  </div>
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-800/40 border border-slate-800 text-xs text-slate-300">
+                    <Smartphone className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Acesso Imediato sem Senhas</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
-          {/* Footer info */}
-          <div className="mt-12 pt-6 border-t border-slate-800/60 flex items-center justify-between gap-4 text-xs text-slate-500">
-            <div className="flex items-center gap-3">
-              <span>Desenvolvido por JH7</span>
-              <DatabaseStatusIndicator />
-            </div>
-            <span className="text-slate-400">v2026.08.0007</span>
+          {/* Database Health Badge on Bottom Left */}
+          <div className="mt-8 pt-6 border-t border-slate-800/60 flex items-center justify-between">
+            <DatabaseStatusIndicator />
+            <span className="text-[11px] text-slate-500 font-mono">v{SYSTEM_VERSION}</span>
           </div>
         </div>
 
-        {/* Right Column: Authentication Form */}
-        <div className="lg:col-span-6 p-8 sm:p-12 flex flex-col justify-center bg-slate-900/30">
-          <div className="max-w-md w-full mx-auto space-y-8">
+        {/* Right Column: Form Container */}
+        <div className="lg:col-span-6 p-8 sm:p-12 flex flex-col justify-center bg-slate-900/40">
+          <div className="max-w-md w-full mx-auto space-y-6">
             
-            {/* Header / Type Badge */}
+            {/* Form Title & Description */}
             <div>
-              <div 
-                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium mb-3 ${
-                  isSaas 
-                    ? "bg-indigo-500/10 border-indigo-500/25 text-indigo-300" 
-                    : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                }`}
-              >
-                {isSaas ? <Shield className="w-3.5 h-3.5" /> : <Building2 className="w-3.5 h-3.5" />}
-                <span>{isSaas ? "Super Admin" : "Portal da Empresa"}</span>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-                {isSaas ? "Acesso Administrativo" : "Acessar Painel"}
-              </h2>
-              <p className="text-sm text-slate-400 mt-1">
+              <h3 className="text-xl font-bold text-white tracking-tight">
+                {isSaas ? "Acesso Super Admin" : "Acesso à Empresa"}
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
                 {isSaas 
-                  ? "Gerenciamento global e configurações do ecossistema SaaS." 
-                  : "Entre com as credenciais da sua empresa para continuar."}
+                  ? "Credenciais restritas de administração SaaS"
+                  : otpStep === "whatsapp" 
+                    ? "Informe o WhatsApp de acesso para receber o código OTP" 
+                    : "Insira o código de 6 dígitos recebido no seu WhatsApp"}
               </p>
             </div>
 
-            {/* Error Message Box */}
+            {/* Error Message Alert */}
             {errorMessage && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-                <span>{errorMessage}</span>
+              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-start gap-2.5 text-rose-400 text-xs animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="flex-1 font-medium">{errorMessage}</div>
               </div>
             )}
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-5">
-              {/* E-mail Field */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-300">
-                  E-mail
-                </label>
-                <div className="relative rounded-xl shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                    <Mail className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder={isSaas ? "admin@seusistema.com" : "exemplo@empresa.com"}
-                    className={`w-full pl-10 pr-4 py-3 bg-slate-950/60 border rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
-                      isSaas
-                        ? "border-slate-800 focus:ring-indigo-500/40 focus:border-indigo-500"
-                        : "border-slate-800 focus:ring-emerald-500/40 focus:border-emerald-500"
-                    }`}
-                  />
-                </div>
+            {/* Success Message Alert */}
+            {successMessage && (
+              <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-start gap-2.5 text-emerald-400 text-xs animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="flex-1 font-medium">{successMessage}</div>
               </div>
+            )}
 
-              {/* Password Field */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-semibold text-slate-300">
-                    Senha
+            {/* Dev OTP Preview helper (for instant testing) */}
+            {devOtpPreview && (
+              <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs flex items-center justify-between font-mono">
+                <span>Código OTP recebido: <strong>{devOtpPreview}</strong></span>
+                <button
+                  type="button"
+                  onClick={() => setOtpCode(devOtpPreview)}
+                  className="px-2 py-0.5 rounded bg-indigo-500/20 hover:bg-indigo-500/40 text-[11px] text-white"
+                >
+                  Preencher
+                </button>
+              </div>
+            )}
+
+            {/* FORM: SAAS LOGIN (E-mail + Senha) */}
+            {isSaas && (
+              <form onSubmit={handleSaasSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    E-mail do Administrador
                   </label>
-                  <Link
-                    href="#"
-                    className={`text-xs font-medium transition-colors ${
-                      isSaas 
-                        ? "text-indigo-400 hover:text-indigo-300" 
-                        : "text-emerald-400 hover:text-emerald-300"
-                    }`}
-                  >
-                    Esqueceu a senha?
-                  </Link>
-                </div>
-                <div className="relative rounded-xl shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                    <Lock className="w-4 h-4" />
+                  <div className="relative">
+                    <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="admin@saas.com"
+                      className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50"
+                    />
                   </div>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className={`w-full pl-10 pr-11 py-3 bg-slate-950/60 border rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
-                      isSaas
-                        ? "border-slate-800 focus:ring-indigo-500/40 focus:border-indigo-500"
-                        : "border-slate-800 focus:ring-emerald-500/40 focus:border-emerald-500"
-                    }`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-slate-300 transition-colors"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
                 </div>
-              </div>
 
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className={`w-full py-3.5 px-4 rounded-xl font-semibold text-sm shadow-lg active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed group ${
-                  isSaas
-                    ? "text-white bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-600 hover:from-indigo-400 hover:to-violet-400 shadow-indigo-500/25"
-                    : "text-slate-950 bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-300 hover:from-emerald-300 hover:to-teal-300 shadow-emerald-500/20"
-                }`}
-              >
-                {isLoading ? (
-                  <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <span>{isSaas ? "Entrar no Painel Super Admin" : "Entrar no Painel"}</span>
-                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                  </>
-                )}
-              </button>
-            </form>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Senha de Acesso
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
 
-            {/* Quick Switch Links between Portals */}
-            <div className="pt-4 border-t border-slate-800/60 text-center">
-              <p className="text-xs text-slate-500">
-                {isSaas ? (
-                  <>
-                    Acessar o portal de clientes?{" "}
-                    <Link
-                      href="/painel/login"
-                      className="text-indigo-400 hover:underline font-medium"
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50"
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Autenticando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Entrar no Super Admin</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* FORM: PAINEL EMPRESA (WhatsApp -> OTP Code) */}
+            {!isSaas && otpStep === "whatsapp" && (
+              <form onSubmit={handleRequestOtp} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    WhatsApp de Acesso da Empresa
+                  </label>
+                  <div className="relative">
+                    <Smartphone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-400" />
+                    <input
+                      type="text"
+                      required
+                      value={whatsapp}
+                      onChange={handleWhatsappChange}
+                      placeholder="(11) 99999-9999"
+                      maxLength={15}
+                      className="w-full pl-10 pr-4 py-3 text-xs rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 font-medium"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1.5">
+                    Informe o número cadastrado no sistema para receber o código OTP de 6 dígitos.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 hover:shadow-emerald-600/50 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50"
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Enviando código...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Receber Código OTP via WhatsApp</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* FORM: PAINEL EMPRESA - DIGITAÇÃO DO CÓDIGO OTP */}
+            {!isSaas && otpStep === "code" && (
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-300">
+                      Código de Verificação (6 Dígitos)
+                    </label>
+                    <span className="text-[11px] text-emerald-400 font-medium font-mono">
+                      {whatsapp}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-400" />
+                    <input
+                      type="text"
+                      required
+                      autoFocus
+                      value={otpCode}
+                      onChange={handleOtpChange}
+                      placeholder="000000"
+                      maxLength={6}
+                      className="w-full pl-10 pr-4 py-3 text-lg font-black tracking-widest text-center rounded-xl bg-slate-900/90 border border-emerald-500/50 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between mt-2 text-[11px]">
+                    <span className="text-slate-400">Válido por 10 minutos</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOtpStep("whatsapp");
+                        setOtpCode("");
+                        setDevOtpPreview(null);
+                        setErrorMessage("");
+                      }}
+                      className="text-emerald-400 hover:text-emerald-300 underline"
                     >
-                      Login da Empresa
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    É um administrador da plataforma?{" "}
-                    <Link
-                      href="/sa/login"
-                      className="text-emerald-400 hover:underline font-medium"
-                    >
-                      Painel Super Admin
-                    </Link>
-                  </>
-                )}
-              </p>
+                      Trocar número
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading || otpCode.length !== 6}
+                  className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 hover:shadow-emerald-600/50 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50"
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Validando código...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Confirmar e Acessar Painel</span>
+                      <CheckCircle2 className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* Alternar entre Portais */}
+            <div className="pt-4 border-t border-slate-800/80 text-center">
+              {isSaas ? (
+                <Link
+                  href="/painel/login"
+                  className="text-xs text-slate-400 hover:text-emerald-400 transition-colors inline-flex items-center gap-1.5"
+                >
+                  <span>Acesso de Empresas & Clientes (via OTP WhatsApp)</span>
+                  <ArrowRight className="w-3 h-3" />
+                </Link>
+              ) : (
+                <Link
+                  href="/sa/login"
+                  className="text-xs text-slate-400 hover:text-indigo-400 transition-colors inline-flex items-center gap-1.5"
+                >
+                  <span>Acesso Super Administrador SaaS</span>
+                  <ArrowRight className="w-3 h-3" />
+                </Link>
+              )}
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );

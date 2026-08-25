@@ -3,7 +3,7 @@
 ## 1. Dados do Projeto
 - **Nome do Sistema:** JH7 Marketing
 - **Descrição:** Gerenciamento de Marketing em Grupos de WhatsApp
-- **Versão Atual:** `2026.08.0007`
+- **Versão Atual:** `2026.08.0009`
 - **Rodapé:** Desenvolvido por JH7
 
 ## 2. Visão Geral
@@ -11,15 +11,26 @@ Telas de autenticação desenvolvidas com estética moderna/glassmorphism dark m
 
 ### A. Portal da Empresa (`/painel/login`)
 - **Paleta de Cores:** Tons esmeralda / teal / slate escuro.
-- **Coluna Esquerda:** Focada no usuário final e marketing em grupos de WhatsApp (automação de ofertas, disparos programados, proteção anti-bloqueio).
-- **Coluna Direita:** Login com formulário com e-mail, senha e botão "Entrar no Painel".
-- **Validação de Acesso:** Consulta direta à tabela `users` no MySQL com `mysql2/promise`. Redireciona para `/painel`.
+- **Método de Autenticação:** OTP (One-Time Password) via WhatsApp com código de 6 dígitos numéricos.
+- **Fluxo do Usuário:**
+  1. Digita o WhatsApp corporativo cadastrado (com máscara automática).
+  2. Sistema valida existência e status ativo da empresa e do usuário.
+  3. Envia código temporário de 6 dígitos (válido por 10 minutos).
+  4. Usuário digita o código OTP recebido e acessa diretamente o `/painel`.
 
 ### B. Super Admin SaaS (`/sa/login`)
 - **Paleta de Cores:** Tons índigo / violeta / roxo profundo.
-- **Coluna Esquerda:** Focada na gestão da plataforma SaaS (visão geral do ecossistema, controle central & multi-tenant, gestão de empresas, instâncias e filas).
-- **Coluna Direita:** Login administrativo com botão "Entrar no Painel Super Admin".
+- **Método de Autenticação:** E-mail e Senha de Super Admin (`joaohueder@gmail.com` / `123456`).
 - **Validação de Acesso:** Validação estrita via tabela `users` no MySQL para usuários com `role = 'SUPER_ADMIN'`. Redireciona para `/sa`.
+
+## 3. Cadastro e Unicidade de WhatsApp no Super Admin (`/sa/companies`)
+- Removido campo de telefone convencional.
+- **WhatsApp da Empresa:** Número institucional para contato e notificações gerais.
+- **WhatsApp de Acesso Admin:** Número exclusivo e obrigatório para autenticação OTP do administrador da empresa.
+- **Regra de Unicidade Global:** Validação no backend e frontend impedindo cadastrar o mesmo WhatsApp de acesso admin para mais de uma empresa em todo o sistema.
+
+## 4. Migrations do Banco de Dados
+- `0004_add_admin_whatsapp_and_otp_to_users_and_companies.sql`: Adiciona campos `admin_whatsapp` (UNIQUE) em `companies`, e `whatsapp` (UNIQUE), `otp_code` e `otp_expires_at` em `users`.
 
 ## 3. Banco de Dados e Autenticação
 - Módulo `src/lib/db.ts` gerencia o pool de conexões com MySQL.
