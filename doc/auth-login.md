@@ -3,7 +3,7 @@
 ## 1. Dados do Projeto
 - **Nome do Sistema:** JH7 Marketing
 - **Descrição:** Gerenciamento de Marketing em Grupos de WhatsApp
-- **Versão Atual:** `2026.08.0001`
+- **Versão Atual:** `2026.08.0002`
 - **Rodapé:** Desenvolvido por JH7
 
 ## 2. Visão Geral

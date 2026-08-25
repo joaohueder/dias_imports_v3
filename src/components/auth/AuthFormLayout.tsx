@@ -211,7 +211,7 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
           {/* Footer info */}
           <div className="mt-12 pt-6 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500">
             <span>Desenvolvido por JH7</span>
-            <span className="text-slate-400">v2026.08.0001</span>
+            <span className="text-slate-400">v2026.08.0002</span>
           </div>
         </div>
 
