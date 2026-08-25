@@ -71,8 +71,8 @@ export async function getCurrentSaUser(): Promise<CurrentUserSession | null> {
 
   try {
     const query = targetId
-      ? "SELECT id, name, email, role, status, company_id, permissions, system_role FROM users WHERE id = ? LIMIT 1"
-      : "SELECT id, name, email, role, status, company_id, permissions, system_role FROM users WHERE email = ? LIMIT 1";
+      ? "SELECT id, name, email, role, status, company_id, permissions FROM users WHERE id = ? LIMIT 1"
+      : "SELECT id, name, email, role, status, company_id, permissions FROM users WHERE email = ? LIMIT 1";
     const param = targetId || targetEmail;
 
     const [rows] = await pool.query<RowDataPacket[]>(query, [param]);
@@ -96,7 +96,7 @@ export async function getCurrentSaUser(): Promise<CurrentUserSession | null> {
         role: user.role,
         company_id: user.company_id,
         permissions,
-        system_role: user.system_role || (user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : user.role === "ADMIN" ? "ADMIN" : null),
+        system_role: user.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : user.role === 'ADMIN' ? 'ADMIN' : null,
       };
     }
   } catch (err) {
