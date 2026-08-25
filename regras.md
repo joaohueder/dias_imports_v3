@@ -5,7 +5,7 @@
 - Descrição: Gerenciamento de Marketing em Grupos de WhatsApp
 - Usuário inicial super admin do saas: joaohueder@gmail.com
 - Senha do super admin do saas: 123456
-- Versão do sistema: 2026.08.0003
+- Versão do sistema: 2026.08.0004
 
 ## MEMORIA DO PROJETO
 - grave sempre os arquivos de memória na pasta "/doc/".

@@ -30,10 +30,23 @@ export async function GET() {
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Erro de conexão";
+    const code = (error as { code?: string })?.code || "UNKNOWN_ERROR";
+    const errno = (error as { errno?: number })?.errno;
+    const sqlState = (error as { sqlState?: string })?.sqlState;
+
     return NextResponse.json(
       {
         status: "offline",
         message,
+        code,
+        errno,
+        sqlState,
+        config: {
+          host,
+          port,
+          user,
+          database,
+        },
         timestamp: new Date().toISOString(),
       },
       { status: 503 }
