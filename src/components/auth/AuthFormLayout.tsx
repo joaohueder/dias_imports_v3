@@ -74,7 +74,7 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
           : "selection:bg-emerald-500/30 selection:text-emerald-300"
       }`}
     >
-      <AnimatedBackground variant={isSaas ? "saas" : "empresa"} />
+      <AnimatedBackground palette={isSaas ? "indigo" : "emerald"} />
 
       {/* Main Glassmorphic Container */}
       <div className="relative z-10 w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 rounded-3xl overflow-hidden border border-slate-800/80 bg-slate-900/60 backdrop-blur-xl shadow-2xl shadow-black/80">

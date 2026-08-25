@@ -89,7 +89,7 @@ export async function POST(request: Request) {
       });
     }
 
-    if (portalType === "sa" && user.role !== "SUPER_ADMIN") {
+    if (portalType === "sa") {
       return NextResponse.json(
         {
           success: false,
