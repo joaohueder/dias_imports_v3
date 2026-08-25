@@ -4,6 +4,7 @@ import mysql from "mysql2/promise";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  let connection: mysql.Connection | null = null;
   const host = process.env.DB_HOST || "localhost";
   const port = Number(process.env.DB_PORT) || 3306;
   const user = process.env.DB_USER || "root";
@@ -11,13 +12,13 @@ export async function GET() {
   const database = process.env.DB_NAME || "jh7_marketing";
 
   try {
-    const connection = await mysql.createConnection({
+    connection = await mysql.createConnection({
       host,
       port,
       user,
       password,
       database,
-      connectTimeout: 2000,
+      connectTimeout: 3000,
     });
 
     await connection.ping();
@@ -29,6 +30,14 @@ export async function GET() {
       timestamp: new Date().toISOString(),
     });
   } catch (error: unknown) {
+    if (connection) {
+      try {
+        await connection.end();
+      } catch {
+        // ignora erro ao fechar conexão falha
+      }
+    }
+
     const message = error instanceof Error ? error.message : "Erro de conexão";
     const code = (error as { code?: string })?.code || "UNKNOWN_ERROR";
     const errno = (error as { errno?: number })?.errno;
@@ -46,6 +55,8 @@ export async function GET() {
           port,
           user,
           database,
+          hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
+          hasDbHost: Boolean(process.env.DB_HOST),
         },
         timestamp: new Date().toISOString(),
       },

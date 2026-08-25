@@ -2,6 +2,16 @@ import mysql, { Pool } from "mysql2/promise";
 
 let pool: Pool | null = null;
 
+export function getDatabaseUrl(): string {
+  const host = process.env.DB_HOST || "localhost";
+  const port = Number(process.env.DB_PORT) || 3306;
+  const user = process.env.DB_USER || "root";
+  const password = process.env.DB_PASSWORD || "";
+  const database = process.env.DB_NAME || "jh7_marketing";
+
+  return `mysql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
+}
+
 export function getDbPool(): Pool {
   if (!pool) {
     const host = process.env.DB_HOST || "localhost";
