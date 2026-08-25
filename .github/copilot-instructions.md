@@ -7,3 +7,4 @@
 - A skill `JH7-MEMORY` é a guardiã da memória técnica e funcional do projeto, consultada antes de implementar e atualizada após mudanças.
 - A skill `JH7-DESIGNER` é acionada sempre que houver tarefas de UI/UX, design system, componentes visuais e frontend.
 - A skill `JH7-DESENVOLVEDOR` é acionada como especialista principal de desenvolvimento, arquitetura, backend (NestJS), frontend funcional (Next.js), banco (MySQL/Prisma), filas (Redis/BullMQ), infraestrutura (PM2/Nginx) e segurança.
+- A skill `JH7-SECURITY-GUARDIAN` é o especialista sênior em segurança de aplicações, secure coding e DevSecOps, garantindo conformidade com OWASP, ASVS e auditoria de segurança em todas as camadas.
