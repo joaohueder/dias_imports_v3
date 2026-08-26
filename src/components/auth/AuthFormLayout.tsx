@@ -51,11 +51,6 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [authLogs, setAuthLogs] = useState<string[]>([]);
-  const addLog = (msg: string) => {
-    console.log(msg);
-    setAuthLogs((prev) => [...prev.slice(-15), `[${new Date().toLocaleTimeString()}] ${msg}`]);
-  };
   const [successMessage, setSuccessMessage] = useState("");
 
   const isSaas = type === "sa";
@@ -65,40 +60,29 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
     e.preventDefault();
     setErrorMessage("");
     setSuccessMessage("");
-    addLog(`1. Iniciando login para ${email}...`);
     setIsLoading(true);
 
     try {
-      addLog("2. Enviando POST para /api/auth/login...");
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, portalType: type }),
       });
 
-      addLog(`3. Status HTTP recebido: ${response.status} ${response.statusText}`);
-      const data = await response.json().catch(err => {
-        addLog(`ERRO ao ler JSON da resposta: ${String(err)}`);
+      const data = await response.json().catch(() => {
         return { success: false, message: "Resposta inválida do servidor." };
       });
 
-      addLog(`4. Resposta da API: ${JSON.stringify(data)}`);
-
       if (!response.ok || !data.success) {
         setErrorMessage(data.message || "Falha na autenticação.");
-        addLog(`FALHA: ${data.message || "Credenciais inválidas"}`);
         setIsLoading(false);
         return;
       }
 
       setSuccessMessage("Login autorizado! Redirecionando...");
-      addLog(`5. SUCESSO! Redirecionando para ${data.redirectTo || "/sa"}...`);
-      
-      addLog(`5. SUCESSO! Redirecionando para ${data.redirectTo || "/sa"}...`);
       window.location.href = data.redirectTo || "/sa";
     } catch (err: any) {
       const errMsg = err?.message || String(err);
-      addLog(`EXCEÇÃO de rede/fetch: ${errMsg}`);
       setErrorMessage(`Erro ao conectar: ${errMsg}`);
       setIsLoading(false);
     }
@@ -396,28 +380,7 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
                     </>
                   )}
                 </button>
-              
-            {successMessage && (
-              <a
-                href="/sa"
-                className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs text-center flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all"
-              >
-                <span>Acessar Painel Super Admin Agora &rarr;</span>
-              </a>
-            )}
-            {/* Caixa de Diagnóstico Visual de Logs */}
-            {authLogs.length > 0 && (
-              <div className="mt-4 p-3 rounded-lg bg-slate-950/90 border border-indigo-500/30 text-[11px] font-mono text-slate-300 space-y-1 max-h-36 overflow-y-auto">
-                <div className="text-indigo-400 font-bold flex items-center justify-between border-b border-slate-800 pb-1 mb-1">
-                  <span>Diagnóstico em Tempo Real</span>
-                  <span className="text-[10px] text-slate-500">Auto-scroll</span>
-                </div>
-                {authLogs.map((log, i) => (
-                  <div key={i} className="text-slate-300 break-all">{log}</div>
-                ))}
-              </div>
-            )}
-          </form>
+              </form>
             )}
 
             {/* FORM: PAINEL EMPRESA (WhatsApp -> OTP Code) */}
