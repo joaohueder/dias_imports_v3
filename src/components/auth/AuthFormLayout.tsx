@@ -94,8 +94,8 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
       setSuccessMessage("Login autorizado! Redirecionando...");
       addLog(`5. SUCESSO! Redirecionando para ${data.redirectTo || "/sa"}...`);
       
-      addLog(`5. SUCESSO! Clique no botão abaixo para acessar ${data.redirectTo || "/sa"}`);
-      setIsLoading(false);
+      addLog(`5. SUCESSO! Redirecionando para ${data.redirectTo || "/sa"}...`);
+      window.location.href = data.redirectTo || "/sa";
     } catch (err: any) {
       const errMsg = err?.message || String(err);
       addLog(`EXCEÇÃO de rede/fetch: ${errMsg}`);
