@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { AnimatedBackground } from "./AnimatedBackground";
 import { DatabaseStatusIndicator } from "./DatabaseStatusIndicator";
+import { RedisStatusIndicator } from "./RedisStatusIndicator";
 import { maskPhone } from "@/lib/validators";
 import { SYSTEM_VERSION } from "@/lib/config";
 
@@ -50,6 +51,11 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [authLogs, setAuthLogs] = useState<string[]>([]);
+  const addLog = (msg: string) => {
+    console.log(msg);
+    setAuthLogs((prev) => [...prev.slice(-15), `[${new Date().toLocaleTimeString()}] ${msg}`]);
+  };
   const [successMessage, setSuccessMessage] = useState("");
 
   const isSaas = type === "sa";
@@ -59,34 +65,42 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
     e.preventDefault();
     setErrorMessage("");
     setSuccessMessage("");
-    console.log("[AUTH DEBUG] Iniciando envio do formulário de login:", { email, portalType: type });
+    addLog(`1. Iniciando login para ${email}...`);
     setIsLoading(true);
 
     try {
+      addLog("2. Enviando POST para /api/auth/login...");
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, portalType: type }),
       });
 
-      console.log("[AUTH DEBUG] Resposta HTTP recebida:", response.status, response.statusText);
+      addLog(`3. Status HTTP recebido: ${response.status} ${response.statusText}`);
       const data = await response.json().catch(err => {
-        console.error("[AUTH DEBUG] Erro ao decodificar JSON:", err);
+        addLog(`ERRO ao ler JSON da resposta: ${String(err)}`);
         return { success: false, message: "Resposta inválida do servidor." };
       });
-      console.log("[AUTH DEBUG] Payload retornado:", data);
+
+      addLog(`4. Resposta da API: ${JSON.stringify(data)}`);
 
       if (!response.ok || !data.success) {
         setErrorMessage(data.message || "Falha na autenticação.");
+        addLog(`FALHA: ${data.message || "Credenciais inválidas"}`);
         setIsLoading(false);
         return;
       }
 
-      console.log("[AUTH DEBUG] Login efetuado com sucesso!", data);
-      window.location.href = data.redirectTo || "/sa";
-    } catch (err) {
-      console.error("[AUTH DEBUG] Exceção capturada ao tentar login:", err);
-      setErrorMessage("Erro ao conectar com o servidor. Verifique o console.");
+      setSuccessMessage("Login autorizado! Redirecionando...");
+      addLog(`5. SUCESSO! Redirecionando para ${data.redirectTo || "/sa"}...`);
+      
+      setTimeout(() => {
+        window.location.href = data.redirectTo || "/sa";
+      }, 500);
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      addLog(`EXCEÇÃO de rede/fetch: ${errMsg}`);
+      setErrorMessage(`Erro ao conectar: ${errMsg}`);
       setIsLoading(false);
     }
   };
@@ -278,9 +292,12 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
             </div>
           </div>
 
-          {/* Database Health Badge on Bottom Left */}
-          <div className="mt-8 pt-6 border-t border-slate-800/60 flex items-center justify-between">
-            <DatabaseStatusIndicator />
+          {/* Database & Redis Health Badges on Bottom Left */}
+          <div className="mt-8 pt-6 border-t border-slate-800/60 flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <DatabaseStatusIndicator />
+              <RedisStatusIndicator />
+            </div>
             <span className="text-[11px] text-slate-500 font-mono">v{SYSTEM_VERSION}</span>
           </div>
         </div>
@@ -380,7 +397,20 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
                     </>
                   )}
                 </button>
-              </form>
+              
+            {/* Caixa de Diagnóstico Visual de Logs */}
+            {authLogs.length > 0 && (
+              <div className="mt-4 p-3 rounded-lg bg-slate-950/90 border border-indigo-500/30 text-[11px] font-mono text-slate-300 space-y-1 max-h-36 overflow-y-auto">
+                <div className="text-indigo-400 font-bold flex items-center justify-between border-b border-slate-800 pb-1 mb-1">
+                  <span>Diagnóstico em Tempo Real</span>
+                  <span className="text-[10px] text-slate-500">Auto-scroll</span>
+                </div>
+                {authLogs.map((log, i) => (
+                  <div key={i} className="text-slate-300 break-all">{log}</div>
+                ))}
+              </div>
+            )}
+          </form>
             )}
 
             {/* FORM: PAINEL EMPRESA (WhatsApp -> OTP Code) */}
