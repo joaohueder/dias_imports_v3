@@ -13,37 +13,6 @@ export async function GET() {
 
     const pool = getDbPool();
 
-    // Garante que as tabelas necessárias existam
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS workers (
-        id VARCHAR(64) PRIMARY KEY,
-        name VARCHAR(128) NOT NULL,
-        description TEXT NULL,
-        type VARCHAR(32) NOT NULL DEFAULT 'standard',
-        queue_name VARCHAR(128) NOT NULL,
-        concurrency INT NOT NULL DEFAULT 5,
-        status ENUM('online', 'busy', 'idle', 'offline', 'error') NOT NULL DEFAULT 'idle',
-        processed_count INT NOT NULL DEFAULT 0,
-        failed_count INT NOT NULL DEFAULT 0,
-        delayed_count INT NOT NULL DEFAULT 0,
-        cpu_usage VARCHAR(32) NULL,
-        memory_usage VARCHAR(32) NULL,
-        uptime_seconds INT NOT NULL DEFAULT 0,
-        last_heartbeat_at DATETIME NULL,
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await pool.query(`
-      INSERT IGNORE INTO workers (id, name, description, type, queue_name, concurrency, status, processed_count, failed_count) VALUES
-      ('w-msg-high-1', 'Worker Disparador VIP (Alta)', 'Processamento dedicado para OTPs, 2FA e mensagens críticas', 'priority', 'whatsapp-messages-high', 10, 'online', 0, 0),
-      ('w-msg-default-1', 'Worker Mensagens em Massa #1', 'Distribuição em lotes com jitter e anti-ban para grupos WhatsApp', 'standard', 'whatsapp-messages-default', 5, 'online', 0, 0),
-      ('w-msg-default-2', 'Worker Mensagens em Massa #2', 'Cluster secundário para distribuição de picos de carga', 'standard', 'whatsapp-messages-default', 5, 'online', 0, 0),
-      ('w-webhook-1', 'Worker Sincronizador Webhook', 'Consumo de payloads Evolution API v2.3.7 em tempo real', 'standard', 'evolution-webhook-sync', 8, 'online', 0, 0),
-      ('w-cron-1', 'Worker Scheduler / Cron', 'Auditoria de faturamento, cancelamento por inadimplência e logs', 'scheduled', 'cron-subscriptions', 2, 'idle', 0, 0);
-    `);
-
     // Busca os workers persistidos no banco de dados
     const [workerRows] = await pool.execute<RowDataPacket[]>(
       `SELECT * FROM workers ORDER BY created_at ASC`

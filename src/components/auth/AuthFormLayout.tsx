@@ -94,9 +94,8 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
       setSuccessMessage("Login autorizado! Redirecionando...");
       addLog(`5. SUCESSO! Redirecionando para ${data.redirectTo || "/sa"}...`);
       
-      setTimeout(() => {
-        window.location.href = data.redirectTo || "/sa";
-      }, 500);
+      addLog(`5. SUCESSO! Clique no botão abaixo para acessar ${data.redirectTo || "/sa"}`);
+      setIsLoading(false);
     } catch (err: any) {
       const errMsg = err?.message || String(err);
       addLog(`EXCEÇÃO de rede/fetch: ${errMsg}`);
@@ -398,6 +397,14 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
                   )}
                 </button>
               
+            {successMessage && (
+              <a
+                href="/sa"
+                className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs text-center flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all"
+              >
+                <span>Acessar Painel Super Admin Agora &rarr;</span>
+              </a>
+            )}
             {/* Caixa de Diagnóstico Visual de Logs */}
             {authLogs.length > 0 && (
               <div className="mt-4 p-3 rounded-lg bg-slate-950/90 border border-indigo-500/30 text-[11px] font-mono text-slate-300 space-y-1 max-h-36 overflow-y-auto">

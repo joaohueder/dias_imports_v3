@@ -94,13 +94,14 @@ export async function POST(request: Request) {
 
     try {
       const [defaultInstances] = await pool.query<RowDataPacket[]>(
-        `SELECT name, instance_key, status FROM instances 
+        `SELECT id, name, instance_key, status FROM instances 
          WHERE (is_default = 1 OR status = 'connected') 
          ORDER BY is_default DESC, (status = 'connected') DESC, updated_at DESC LIMIT 1`
       );
 
-      // Na Evolution API o nome do endpoint é o instance_key / name
-      const targetInstance = defaultInstances[0]?.instance_key || defaultInstances[0]?.name || "default_instance";
+      // Na Evolution API v2.3.7 o identificador da rota de mensagem é o nome cadastrado da instância (instance.name)
+      const targetInstanceName = defaultInstances[0]?.name || defaultInstances[0]?.instance_key || "Instancia_Padrao_T0U1U";
+      const targetInstanceId = defaultInstances[0]?.id;
 
       // Adiciona o DDI 55 caso o número não o contenha
       let targetPhone = cleanWhatsapp;
@@ -110,14 +111,59 @@ export async function POST(request: Request) {
 
       const messageText = `🔐 *Seu Código de Acesso - JH7 Marketing*\n\nOlá *${user.name}*, use o código de verificação abaixo para acessar sua conta:\n\n*${otpCode}*\n\n⏱️ Este código é válido por 10 minutos. Se você não solicitou este acesso, desconsidere esta mensagem.`;
 
-      const sendResult = await sendEvolutionText(targetInstance, targetPhone, messageText);
+      // 2. Registra o job na fila persistida do banco de dados (Central de Tarefas / BullMQ)
+      const jobId = `job-otp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      await pool.query(
+        `INSERT INTO background_jobs (id, queue_name, name, payload, status, attempts, max_attempts) 
+         VALUES (?, 'whatsapp-messages-high', 'send-otp-message', ?, 'active', 1, 3)`,
+        [
+          jobId,
+          JSON.stringify({
+            userId: user.id,
+            userName: user.name,
+            phone: targetPhone,
+            instance: targetInstanceName,
+            otpCode,
+          }),
+        ]
+      );
+
+      const sendStart = Date.now();
+      const sendResult = await sendEvolutionText(targetInstanceName, targetPhone, messageText);
+      const durationMs = Date.now() - sendStart;
 
       if (sendResult.ok) {
         sentViaWhatsApp = true;
-        console.log(`[OTP WHATSAPP] Código enviado com sucesso via Evolution API (${targetInstance}) para ${targetPhone}`);
+        console.log(`[OTP WHATSAPP] Código enviado com sucesso via Evolution API (${targetInstanceName}) para ${targetPhone}`);
+
+        // Atualiza a tarefa como concluída na fila
+        await pool.query(
+          `UPDATE background_jobs 
+           SET status = 'completed', duration_ms = ?, processed_at = NOW(), finished_at = NOW() 
+           WHERE id = ?`,
+          [durationMs, jobId]
+        );
+
+        // Atualiza métricas da instância
+        if (targetInstanceId) {
+          await pool.query(
+            `UPDATE instances 
+             SET total_messages_sent = total_messages_sent + 1, last_activity_at = NOW() 
+             WHERE id = ?`,
+            [targetInstanceId]
+          );
+        }
       } else {
         whatsappErrorMessage = (sendResult.data as { error?: string })?.error || "Falha na comunicação com WhatsApp";
-        console.warn(`[OTP WHATSAPP] Falha no envio via Evolution API (${targetInstance} para ${targetPhone}):`, sendResult.data);
+        console.warn(`[OTP WHATSAPP] Falha no envio via Evolution API (${targetInstanceName} para ${targetPhone}):`, sendResult.data);
+
+        // Atualiza a tarefa como com falha na fila
+        await pool.query(
+          `UPDATE background_jobs 
+           SET status = 'failed', failed_reason = ?, duration_ms = ?, processed_at = NOW(), finished_at = NOW() 
+           WHERE id = ?`,
+          [whatsappErrorMessage, durationMs, jobId]
+        );
       }
     } catch (err: unknown) {
       whatsappErrorMessage = err instanceof Error ? err.message : "Erro no disparador de WhatsApp";
