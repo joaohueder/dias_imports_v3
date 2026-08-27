@@ -52,6 +52,7 @@ import {
   validateCpfCnpj,
 } from "@/lib/validators";
 import { FloatingActionBar } from "@/components/ui/FloatingActionBar";
+import { useSaAuth } from "@/context/SaAuthContext";
 
 interface Subscription {
   id: number;
@@ -206,6 +207,7 @@ function CompanyFormContent() {
     return "company";
   };
   const [activeTab, setActiveTab] = useState<"company" | "subscription" | "instances">(getInitialTab());
+  const { can, user: authUser } = useSaAuth();
 
   // Atualizar aba ativa se a URL mudar (por exemplo navegação direta com query param)
   useEffect(() => {
@@ -277,19 +279,28 @@ function CompanyFormContent() {
     }
 
     async function loadSubscriptions() {
+      if (!can("subscriptions", "view") && !can("plans", "view")) return;
       try {
         setLoadingSubscriptions(true);
-        const [subRes, planRes] = await Promise.all([
-          fetch(`/api/sa/subscriptions?company_id=${companyId}`),
-          fetch("/api/sa/plans?status=active"),
-        ]);
-        const subData = await subRes.json();
-        const planData = await planRes.json();
+        const fetches: Promise<any>[] = [];
+        if (can("subscriptions", "view")) {
+          fetches.push(fetch(`/api/sa/subscriptions?company_id=${companyId}`).then(r => r.ok ? r.json() : null));
+        } else {
+          fetches.push(Promise.resolve(null));
+        }
 
-        if (subData.success) {
+        if (can("plans", "view")) {
+          fetches.push(fetch("/api/sa/plans?status=active").then(r => r.ok ? r.json() : null));
+        } else {
+          fetches.push(Promise.resolve(null));
+        }
+
+        const [subData, planData] = await Promise.all(fetches);
+
+        if (subData && subData.success) {
           setSubscriptions(subData.subscriptions || []);
         }
-        if (planData.success) {
+        if (planData && planData.success) {
           setAvailablePlans(planData.plans || []);
           if (planData.plans?.length > 0) {
             setSelectedPlanId(String(planData.plans[0].id));
@@ -303,9 +314,11 @@ function CompanyFormContent() {
     }
 
     async function loadInstances() {
+      if (!can("instances", "view")) return;
       try {
         setLoadingInstances(true);
         const res = await fetch(`/api/sa/instances?company_id=${companyId}`);
+        if (!res.ok) return;
         const data = await res.json();
         if (data.success) {
           setInstances(data.instances || []);
@@ -320,7 +333,7 @@ function CompanyFormContent() {
     loadCompany();
     loadSubscriptions();
     loadInstances();
-  }, [companyId, isEditing, router]);
+  }, [companyId, isEditing, router, authUser?.id]);
 
   // Validation Errors on Blur
   const [errors, setErrors] = useState<{
@@ -595,10 +608,11 @@ function CompanyFormContent() {
 
   // Funções de Gestão de Instâncias na aba "Instância"
   const refreshCompanyInstances = async () => {
-    if (!companyId) return;
+    if (!companyId || !can("instances", "view")) return;
     try {
       setLoadingInstances(true);
       const res = await fetch(`/api/sa/instances?company_id=${companyId}`);
+      if (!res.ok) return;
       const data = await res.json();
       if (data.success) {
         setInstances(data.instances || []);
@@ -881,11 +895,12 @@ function CompanyFormContent() {
 
   // Polling em tempo real para sincronização contínua do card da instância
   useEffect(() => {
-    if (!companyId || activeTab !== "instances") return;
+    if (!companyId || activeTab !== "instances" || !can("instances", "view")) return;
 
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/sa/instances?company_id=${companyId}`);
+        if (!res.ok) return;
         const data = await res.json();
         if (data.success && data.instances) {
           setInstances(data.instances);
@@ -896,7 +911,7 @@ function CompanyFormContent() {
     }, 4000);
 
     return () => clearInterval(interval);
-  }, [companyId, activeTab]);
+  }, [companyId, activeTab, authUser?.id]);
 
   // Separação de Assinatura Ativa vs Histórico/Vencidas
   // Apenas assinaturas ativas são consideradas vigentes
@@ -1061,41 +1076,45 @@ function CompanyFormContent() {
 
         {isEditing && (
           <>
-            <button
-              type="button"
-              onClick={() => setActiveTab("subscription")}
-              className={`flex items-center gap-2 px-4 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
-                activeTab === "subscription"
-                  ? "border-indigo-500 text-indigo-400 bg-indigo-500/10 rounded-t-xl"
-                  : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700"
-              }`}
-            >
-              <CreditCard className="w-4 h-4" />
-              <span>Assinatura</span>
-              {activeSubscription && (
-                <span className="ml-1.5 px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-400 font-extrabold border border-emerald-500/30">
-                  Ativa
-                </span>
-              )}
-            </button>
+            {can("subscriptions", "view") && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("subscription")}
+                className={`flex items-center gap-2 px-4 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
+                  activeTab === "subscription"
+                    ? "border-indigo-500 text-indigo-400 bg-indigo-500/10 rounded-t-xl"
+                    : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700"
+                }`}
+              >
+                <CreditCard className="w-4 h-4" />
+                <span>Assinatura</span>
+                {activeSubscription && (
+                  <span className="ml-1.5 px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-400 font-extrabold border border-emerald-500/30">
+                    Ativa
+                  </span>
+                )}
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() => setActiveTab("instances")}
-              className={`flex items-center gap-2 px-4 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
-                activeTab === "instances"
-                  ? "border-indigo-500 text-indigo-400 bg-indigo-500/10 rounded-t-xl"
-                  : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700"
-              }`}
-            >
-              <Server className="w-4 h-4" />
-              <span>Instância</span>
-              {instances.length > 0 && (
-                <span className="ml-1.5 px-2 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300 font-extrabold border border-indigo-500/30">
-                  {instances.length}
-                </span>
-              )}
-            </button>
+            {can("instances", "view") && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("instances")}
+                className={`flex items-center gap-2 px-4 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
+                  activeTab === "instances"
+                    ? "border-indigo-500 text-indigo-400 bg-indigo-500/10 rounded-t-xl"
+                    : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700"
+                }`}
+              >
+                <Server className="w-4 h-4" />
+                <span>Instância</span>
+                {instances.length > 0 && (
+                  <span className="ml-1.5 px-2 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300 font-extrabold border border-indigo-500/30">
+                    {instances.length}
+                  </span>
+                )}
+              </button>
+            )}
           </>
         )}
       </div>
@@ -1413,14 +1432,16 @@ function CompanyFormContent() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setAssignModalOpen(true)}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-md cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>{activeSubscription ? "Alterar / Renovar Plano" : "Vincular Plano"}</span>
-            </button>
+            {can("subscriptions", "create") && (
+              <button
+                type="button"
+                onClick={() => setAssignModalOpen(true)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-md cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{activeSubscription ? "Alterar / Renovar Plano" : "Vincular Plano"}</span>
+              </button>
+            )}
           </div>
 
           {loadingSubscriptions ? (
@@ -1516,7 +1537,7 @@ function CompanyFormContent() {
                             )}
                           </div>
                         </div>
-                        {editingLimitType !== "groups" && (
+                        {editingLimitType !== "groups" && can("subscriptions", "edit") && (
                           <button
                             type="button"
                             onClick={() => handleStartEditLimit("groups", activeSubscription.max_groups)}
@@ -1570,7 +1591,7 @@ function CompanyFormContent() {
                             )}
                           </div>
                         </div>
-                        {editingLimitType !== "products" && (
+                        {editingLimitType !== "products" && can("subscriptions", "edit") && (
                           <button
                             type="button"
                             onClick={() => handleStartEditLimit("products", activeSubscription.max_products)}
@@ -1624,7 +1645,7 @@ function CompanyFormContent() {
                             )}
                           </div>
                         </div>
-                        {editingLimitType !== "messages" && (
+                        {editingLimitType !== "messages" && can("subscriptions", "edit") && (
                           <button
                             type="button"
                             onClick={() => handleStartEditLimit("messages", activeSubscription.max_messages_day)}
@@ -1650,19 +1671,21 @@ function CompanyFormContent() {
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSubToExpireId(activeSubscription.id);
-                          setExpireModalOpen(true);
-                        }}
-                        disabled={isExpiringPlan}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all cursor-pointer disabled:opacity-50"
-                        title="Expirar imediatamente esta assinatura"
-                      >
-                        <Ban className="w-3.5 h-3.5" />
-                        <span>Expirar Assinatura</span>
-                      </button>
+                      {can("subscriptions", "delete") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSubToExpireId(activeSubscription.id);
+                            setExpireModalOpen(true);
+                          }}
+                          disabled={isExpiringPlan}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all cursor-pointer disabled:opacity-50"
+                          title="Expirar imediatamente esta assinatura"
+                        >
+                          <Ban className="w-3.5 h-3.5" />
+                          <span>Expirar Assinatura</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -1763,7 +1786,7 @@ function CompanyFormContent() {
               >
                 <RefreshCw className={`w-4 h-4 ${loadingInstances ? "animate-spin text-indigo-400" : ""}`} />
               </button>
-              {instances.length === 0 && (
+              {instances.length === 0 && can("instances", "create") && (
                 <button
                   type="button"
                   onClick={handleOpenCreateInstance}
@@ -1790,14 +1813,16 @@ function CompanyFormContent() {
               <p className="text-xs text-slate-400 max-w-sm mt-1 mb-4">
                 Esta empresa ainda não possui instâncias de WhatsApp configuradas no ecossistema.
               </p>
-              <button
-                type="button"
-                onClick={handleOpenCreateInstance}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
-              >
-                <Plus className="w-4 h-4 shrink-0" />
-                <span>Cadastrar Primeira Instância</span>
-              </button>
+              {can("instances", "create") && (
+                <button
+                  type="button"
+                  onClick={handleOpenCreateInstance}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 shrink-0" />
+                  <span>Cadastrar Primeira Instância</span>
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1884,66 +1909,72 @@ function CompanyFormContent() {
                     {/* Ações da Instância */}
                     <div className="flex items-center justify-between gap-2 pt-4 mt-4 border-t border-slate-800/60">
                       <div className="flex items-center gap-2">
-                        {isConnected ? (
+                        {can("instances", "edit") && (
                           <>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenTestModal(inst)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 transition-all cursor-pointer whitespace-nowrap"
-                              title="Testar Envio de Mensagem no WhatsApp"
-                            >
-                              <Send className="w-3.5 h-3.5 shrink-0" />
-                              <span>Testar Envio</span>
-                            </button>
+                            {isConnected ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenTestModal(inst)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 transition-all cursor-pointer whitespace-nowrap"
+                                  title="Testar Envio de Mensagem no WhatsApp"
+                                >
+                                  <Send className="w-3.5 h-3.5 shrink-0" />
+                                  <span>Testar Envio</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setInstanceToDisconnect(inst);
+                                    setDisconnectInstanceModalOpen(true);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all cursor-pointer whitespace-nowrap"
+                                  title="Desconectar WhatsApp"
+                                >
+                                  <Power className="w-3.5 h-3.5 shrink-0" />
+                                  <span>Desconectar</span>
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenQrModal(inst)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 transition-all cursor-pointer whitespace-nowrap"
+                                title="Gerar QR Code para Leitura"
+                              >
+                                <QrCode className="w-3.5 h-3.5 shrink-0" />
+                                <span>Gerar QRCode</span>
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => {
-                                setInstanceToDisconnect(inst);
-                                setDisconnectInstanceModalOpen(true);
+                                setInstanceToRestart(inst);
+                                setRestartInstanceModalOpen(true);
                               }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all cursor-pointer whitespace-nowrap"
-                              title="Desconectar WhatsApp"
+                              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80 transition-colors cursor-pointer"
+                              title="Reiniciar Instância"
                             >
-                              <Power className="w-3.5 h-3.5 shrink-0" />
-                              <span>Desconectar</span>
+                              <RotateCw className="w-3.5 h-3.5 shrink-0" />
                             </button>
                           </>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenQrModal(inst)}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 transition-all cursor-pointer whitespace-nowrap"
-                            title="Gerar QR Code para Leitura"
-                          >
-                            <QrCode className="w-3.5 h-3.5 shrink-0" />
-                            <span>Gerar QRCode</span>
-                          </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setInstanceToRestart(inst);
-                            setRestartInstanceModalOpen(true);
-                          }}
-                          className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80 transition-colors cursor-pointer"
-                          title="Reiniciar Instância"
-                        >
-                          <RotateCw className="w-3.5 h-3.5 shrink-0" />
-                        </button>
                       </div>
 
                       <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setInstanceToDelete(inst);
-                            setDeleteInstanceModalOpen(true);
-                          }}
-                          className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors cursor-pointer"
-                          title="Excluir Instância"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                        </button>
+                        {can("instances", "delete") && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInstanceToDelete(inst);
+                              setDeleteInstanceModalOpen(true);
+                            }}
+                            className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors cursor-pointer"
+                            title="Excluir Instância"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

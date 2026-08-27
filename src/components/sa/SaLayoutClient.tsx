@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Shield,
   LayoutDashboard,
+  Home,
   Building2,
   Users,
   Server,
@@ -33,6 +34,7 @@ import { DatabaseStatusIndicator } from "@/components/auth/DatabaseStatusIndicat
 import { EvolutionStatusIndicator } from "@/components/auth/EvolutionStatusIndicator";
 import { WhatsappDefaultStatusIndicator } from "@/components/auth/WhatsappDefaultStatusIndicator";
 import { RedisStatusIndicator } from "@/components/auth/RedisStatusIndicator";
+import { Pm2StatusIndicator } from "@/components/auth/Pm2StatusIndicator";
 import { SYSTEM_VERSION } from "@/lib/config";
 import { hasUserPermission, getModuleFromPath } from "@/lib/permissions";
 import { useLayout } from "@/context/LayoutContext";
@@ -50,12 +52,19 @@ interface NavigationItem {
 }
 
 interface NavigationGroup {
-  category: string;
-  icon: any;
+  category?: string;
+  icon?: any;
+  isStandalone?: boolean;
   items: NavigationItem[];
 }
 
 const navigationItems: NavigationGroup[] = [
+  {
+    isStandalone: true,
+    items: [
+      { name: "Início", href: "/sa/inicio", icon: Home, badge: null, module: "inicio" },
+    ],
+  },
   {
     category: "Visão Geral",
     icon: LayoutDashboard,
@@ -82,7 +91,6 @@ const navigationItems: NavigationGroup[] = [
       { name: "Instâncias WhatsApp", href: "/sa/instances", icon: Server, badge: null, module: "instances" },
       { name: "Workers", href: "/sa/workers", icon: Cpu, badge: null, module: "workers" },
       { name: "Central de Tarefas", href: "/sa/jobs", icon: ListTodo, badge: null, module: "jobs" },
-      { name: "Chaves de API & Webhooks", href: "/sa/api-keys", icon: KeyRound, badge: null, module: "api_keys" },
       { name: "Logs de Auditoria", href: "/sa/logs", icon: FileCode2, badge: null, module: "logs" },
     ],
   },
@@ -91,7 +99,7 @@ const navigationItems: NavigationGroup[] = [
     icon: Settings,
     items: [
       { name: "Parâmetros do SaaS", href: "/sa/settings", icon: Settings, badge: null, module: "settings" },
-      { name: "Instância Padrão", href: "/sa/default-instance", icon: Server, badge: null, module: "settings" },
+      { name: "Instância Padrão", href: "/sa/default-instance", icon: Server, badge: null, module: "default_instance" },
     ],
   },
 ];
@@ -137,12 +145,22 @@ export function SaLayoutClient({ children }: SaLayoutClientProps) {
   const [pendingMigrationsCount, setPendingMigrationsCount] = useState<number>(0);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // Monitorar periodicamente o status de migrations para alertar no menu
+  // Monitorar periodicamente o status de migrations para alertar no menu se o usuário tiver permissão
   useEffect(() => {
+    if (!userData.isLoaded) return;
+    
+    // Se não for SUPER_ADMIN e não tiver permissão de view no módulo migrations, não consultar
+    const hasMigrationAccess =
+      userData.role === "SUPER_ADMIN" ||
+      userData.permissions?.migrations?.view === true;
+
+    if (!hasMigrationAccess) return;
+
     let isMounted = true;
     const checkMigrations = async () => {
       try {
         const res = await fetch("/api/sa/migrations");
+        if (res.status === 401 || res.status === 403 || !res.ok) return;
         const data = await res.json();
         if (isMounted && data.success && typeof data.pendingCount === "number") {
           setPendingMigrationsCount(data.pendingCount);
@@ -153,12 +171,12 @@ export function SaLayoutClient({ children }: SaLayoutClientProps) {
     };
 
     checkMigrations();
-    const interval = setInterval(checkMigrations, 10000);
+    const interval = setInterval(checkMigrations, 15000);
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [userData.isLoaded, userData.role, userData.permissions]);
 
   // Abrir exclusivamente o submenu correspondente à rota atual
   useEffect(() => {
@@ -440,19 +458,61 @@ export function SaLayoutClient({ children }: SaLayoutClientProps) {
                 })
                 .filter((group) => group.items.length > 0)
                 .map((group, gIdx) => {
-                  const isExpanded = !!openSubmenus[group.category];
+                  const isExpanded = !!openSubmenus[group.category || ""];
                   const hasActiveChild = group.items.some((item) => isItemActive(item.href));
                   const GroupIcon = group.icon;
                   const groupHasPendingMigrations =
                     pendingMigrationsCount > 0 &&
                     group.items.some((item) => item.href === "/sa/migrations");
 
+                  // Itens standalone (sem submenu colapsável)
+                  if (group.isStandalone) {
+                    return (
+                      <div key={gIdx} className="space-y-1">
+                        {group.items.map((item) => {
+                          const isActive = isItemActive(item.href);
+                          const Icon = item.icon;
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              title={sidebarCollapsed ? item.name : undefined}
+                              className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-all group relative overflow-hidden ${
+                                isActive
+                                  ? "bg-indigo-600/15 text-white border border-indigo-500/40 shadow-sm shadow-indigo-600/10 font-semibold"
+                                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-850/70 border border-transparent"
+                              }`}
+                            >
+                              {isActive && (
+                                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-indigo-500 rounded-r-full shadow-sm shadow-indigo-500" />
+                              )}
+                              <div
+                                className={`relative p-1.5 rounded-lg transition-all shrink-0 ${
+                                  isActive
+                                    ? "bg-indigo-500/25 text-indigo-300"
+                                    : "text-slate-400 group-hover:text-indigo-400 group-hover:bg-slate-800/80"
+                                }`}
+                              >
+                                <Icon className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
+                              </div>
+                              {!sidebarCollapsed && (
+                                <span className="flex-1 whitespace-nowrap text-xs tracking-tight">
+                                  {item.name}
+                                </span>
+                              )}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+
                   return (
                     <div key={gIdx} className="space-y-1">
                       {!sidebarCollapsed ? (
                         <button
                           type="button"
-                          onClick={() => toggleSubmenu(group.category)}
+                          onClick={() => group.category && toggleSubmenu(group.category)}
                           className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] font-bold tracking-wider uppercase transition-all group/header ${
                             groupHasPendingMigrations
                               ? "text-amber-300 bg-amber-500/10 border border-amber-500/30"
@@ -646,18 +706,50 @@ export function SaLayoutClient({ children }: SaLayoutClientProps) {
                     })
                     .filter((group) => group.items.length > 0)
                     .map((group, gIdx) => {
-                      const isExpanded = !!openSubmenus[group.category];
+                      const isExpanded = !!openSubmenus[group.category || ""];
                       const hasActiveChild = group.items.some((item) => isItemActive(item.href));
                       const GroupIcon = group.icon;
                       const groupHasPendingMigrations =
                         pendingMigrationsCount > 0 &&
                         group.items.some((item) => item.href === "/sa/migrations");
 
+                      if (group.isStandalone) {
+                        return (
+                          <div key={gIdx} className="space-y-1">
+                            {group.items.map((item) => {
+                              const isActive = isItemActive(item.href);
+                              const Icon = item.icon;
+                              return (
+                                <Link
+                                  key={item.href}
+                                  href={item.href}
+                                  onClick={() => setMobileMenuOpen(false)}
+                                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                                    isActive
+                                      ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                                      : "text-slate-300 hover:text-white hover:bg-slate-850"
+                                  }`}
+                                >
+                                  <div
+                                    className={`p-1.5 rounded-lg shrink-0 ${
+                                      isActive ? "bg-white/20 text-white" : "bg-slate-800 text-indigo-400"
+                                    }`}
+                                  >
+                                    <Icon className="w-4 h-4" />
+                                  </div>
+                                  <span>{item.name}</span>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        );
+                      }
+
                       return (
                         <div key={gIdx} className="space-y-1 rounded-xl bg-slate-900/40 border border-slate-800/50 p-2">
                           <button
                             type="button"
-                            onClick={() => toggleSubmenu(group.category)}
+                            onClick={() => group.category && toggleSubmenu(group.category)}
                             className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-bold transition-all ${
                               groupHasPendingMigrations
                                 ? "text-amber-300 bg-amber-500/15 border border-amber-500/30"
@@ -821,6 +913,7 @@ export function SaLayoutClient({ children }: SaLayoutClientProps) {
           <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
             <DatabaseStatusIndicator />
             <RedisStatusIndicator />
+            <Pm2StatusIndicator />
             <EvolutionStatusIndicator />
             <WhatsappDefaultStatusIndicator />
 

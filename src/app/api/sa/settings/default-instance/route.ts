@@ -63,6 +63,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
+    if (session.role !== "SUPER_ADMIN") {
+      const perms = session.permissions as Record<string, any> | undefined;
+      const canView = Boolean(perms?.default_instance?.view || perms?.settings?.view);
+      if (!canView) {
+        return NextResponse.json(
+          { error: "Acesso negado. Você não possui permissão para visualizar a instância padrão." },
+          { status: 403 }
+        );
+      }
+    }
+
     await initAuthDatabase();
     await ensureDefaultColumnExists();
     const pool = getDbPool();
@@ -202,10 +213,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (session.role !== "SUPER_ADMIN") {
-      return NextResponse.json(
-        { error: "Acesso negado. Apenas Super Admin pode gerenciar a instância padrão." },
-        { status: 403 }
-      );
+      const perms = session.permissions as Record<string, any> | undefined;
+      const canCreate = Boolean(perms?.default_instance?.create);
+      if (!canCreate) {
+        return NextResponse.json(
+          { error: "Acesso negado. Você não possui permissão para criar a instância padrão." },
+          { status: 403 }
+        );
+      }
     }
 
     await initAuthDatabase();
@@ -288,10 +303,14 @@ export async function DELETE(request: NextRequest) {
     }
 
     if (session.role !== "SUPER_ADMIN") {
-      return NextResponse.json(
-        { error: "Acesso negado. Apenas Super Admin pode excluir a instância padrão." },
-        { status: 403 }
-      );
+      const perms = session.permissions as Record<string, any> | undefined;
+      const canDelete = Boolean(perms?.default_instance?.delete);
+      if (!canDelete) {
+        return NextResponse.json(
+          { error: "Acesso negado. Você não possui permissão para excluir a instância padrão." },
+          { status: 403 }
+        );
+      }
     }
 
     await initAuthDatabase();

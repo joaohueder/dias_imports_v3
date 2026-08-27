@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDbPool, initAuthDatabase } from "@/lib/db";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
+import { logAudit, getClientIpAndAgent } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
 
     const cleanWhatsapp = String(whatsapp).replace(/\D/g, "");
     const cleanCode = String(code).trim();
+    const { ip, userAgent } = getClientIpAndAgent(request);
 
     const [users] = await pool.query<UserRow[]>(
       `SELECT u.id, u.name, u.email, u.whatsapp, u.otp_code, u.otp_expires_at, u.role, u.company_id, u.status,
@@ -48,6 +50,15 @@ export async function POST(request: Request) {
     );
 
     if (users.length === 0) {
+      await logAudit({
+        action: "AUTH_OTP_FAILED",
+        entityType: "auth",
+        ipAddress: ip,
+        userAgent,
+        status: "failed",
+        newValues: { whatsapp: cleanWhatsapp, reason: "Usuário não encontrado" },
+      });
+
       return NextResponse.json(
         { success: false, message: "Usuário não encontrado." },
         { status: 404 }
@@ -57,6 +68,21 @@ export async function POST(request: Request) {
     const user = users[0];
 
     if (user.status !== "active") {
+      await logAudit({
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        userRole: user.role,
+        companyId: user.company_id,
+        action: "AUTH_OTP_BLOCKED",
+        entityType: "auth",
+        entityId: user.id,
+        ipAddress: ip,
+        userAgent,
+        status: "failed",
+        newValues: { reason: "Conta inativa" },
+      });
+
       return NextResponse.json(
         { success: false, message: "Sua conta está inativa. Contate o suporte." },
         { status: 403 }
@@ -64,6 +90,21 @@ export async function POST(request: Request) {
     }
 
     if (!user.otp_code || user.otp_code !== cleanCode) {
+      await logAudit({
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        userRole: user.role,
+        companyId: user.company_id,
+        action: "AUTH_OTP_FAILED",
+        entityType: "auth",
+        entityId: user.id,
+        ipAddress: ip,
+        userAgent,
+        status: "failed",
+        newValues: { reason: "Código OTP incorreto" },
+      });
+
       return NextResponse.json(
         { success: false, message: "Código de verificação incorreto ou expirado." },
         { status: 401 }
@@ -74,6 +115,21 @@ export async function POST(request: Request) {
     if (user.otp_expires_at) {
       const expiresAt = new Date(user.otp_expires_at);
       if (expiresAt.getTime() < Date.now()) {
+        await logAudit({
+          userId: user.id,
+          userName: user.name,
+          userEmail: user.email,
+          userRole: user.role,
+          companyId: user.company_id,
+          action: "AUTH_OTP_EXPIRED",
+          entityType: "auth",
+          entityId: user.id,
+          ipAddress: ip,
+          userAgent,
+          status: "failed",
+          newValues: { reason: "Código OTP expirado" },
+        });
+
         return NextResponse.json(
           { success: false, message: "O código OTP expirou. Solicite um novo código." },
           { status: 401 }
@@ -87,9 +143,24 @@ export async function POST(request: Request) {
       [user.id]
     );
 
-    const redirectTo = user.role === "SUPER_ADMIN" ? "/sa" : "/painel";
+    await logAudit({
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      userRole: user.role,
+      companyId: user.company_id,
+      action: "AUTH_OTP_SUCCESS",
+      entityType: "auth",
+      entityId: user.id,
+      ipAddress: ip,
+      userAgent,
+      status: "success",
+      newValues: { portalType },
+    });
 
-    return NextResponse.json({
+    const redirectTo = user.role === "SUPER_ADMIN" ? "/sa/inicio" : "/painel";
+
+    const response = NextResponse.json({
       success: true,
       message: "Autenticação realizada com sucesso!",
       redirectTo,
@@ -103,6 +174,52 @@ export async function POST(request: Request) {
         company_name: user.company_name,
       },
     });
+
+    const isProduction = process.env.NODE_ENV === "production";
+    const authToken = signSessionToken({ id: user.id, email: user.email, role: user.role });
+
+    if (user.role === "SUPER_ADMIN" || user.role === "ADMIN") {
+      response.cookies.set("sa_auth_token", authToken, {
+        path: "/",
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: "lax",
+      });
+      response.cookies.set("sa_user_id", String(user.id), {
+        path: "/",
+        httpOnly: false,
+        secure: isProduction,
+        sameSite: "lax",
+      });
+      response.cookies.set("sa_user_email", user.email, {
+        path: "/",
+        httpOnly: false,
+        secure: isProduction,
+        sameSite: "lax",
+      });
+    }
+
+    // Define cookies de sessão para o painel da empresa
+    response.cookies.set("company_auth_token", authToken, {
+      path: "/",
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: "lax",
+    });
+    response.cookies.set("company_user_id", String(user.id), {
+      path: "/",
+      httpOnly: false,
+      secure: isProduction,
+      sameSite: "lax",
+    });
+    response.cookies.set("company_id", String(user.company_id || ""), {
+      path: "/",
+      httpOnly: false,
+      secure: isProduction,
+      sameSite: "lax",
+    });
+
+    return response;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Erro ao validar código OTP";
     return NextResponse.json({ success: false, message }, { status: 500 });

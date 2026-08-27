@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
   Building2,
@@ -26,10 +26,13 @@ import {
   Check,
   X,
   Package,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 import { maskPhone } from "@/lib/validators";
+import { useSaAuth } from "@/context/SaAuthContext";
+import { Pagination } from "@/components/ui/Pagination";
 
 interface Company {
   id: number;
@@ -57,10 +60,12 @@ interface Company {
 
 export default function CompaniesPage() {
   const { showError, showSuccess } = useFeedbackModal();
+  const { can } = useSaAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Modais de Criação / Edição
   const [modalOpen, setModalOpen] = useState(false);
@@ -77,6 +82,9 @@ export default function CompaniesPage() {
   const [companyToChangeStatus, setCompanyToChangeStatus] = useState<Company | null>(null);
   const [newStatus, setNewStatus] = useState<"active" | "inactive" | "suspended">("active");
   const [isChangingStatus, setIsChangingStatus] = useState(false);
+
+  // Impersonação
+  const [impersonatingId, setImpersonatingId] = useState<number | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -107,6 +115,7 @@ export default function CompaniesPage() {
 
       if (data.success) {
         setCompanies(data.companies || []);
+        setCurrentPage(1);
       } else {
         showError(data.error || "Erro ao carregar empresas", "Falha ao Carregar");
       }
@@ -269,6 +278,28 @@ export default function CompaniesPage() {
     }
   };
 
+  // Impersonalizar Empresa
+  const handleImpersonate = async (company: Company) => {
+    try {
+      setImpersonatingId(company.id);
+      const res = await fetch(`/api/sa/companies/${company.id}/impersonate`, {
+        method: "POST",
+      });
+      const data = await res.json();
+
+      if (data.success && data.redirectTo) {
+        toast.success(`Acessando painel de "${company.name}" em nova janela...`);
+        window.open(data.redirectTo, "_blank", "noopener,noreferrer");
+      } else {
+        showError(data.error || "Não foi possível impersonalizar esta empresa.", "Acesso Negado");
+      }
+    } catch {
+      showError("Erro de comunicação ao solicitar impersonação.", "Falha de Conexão");
+    } finally {
+      setImpersonatingId(null);
+    }
+  };
+
   // Summary Metrics
   const totalCompanies = companies.length;
   const totalActive = companies.filter((c) => c.status === "active").length;
@@ -279,10 +310,15 @@ export default function CompaniesPage() {
     (c) => c.subscription_status === "expired" || c.subscription_status === "canceled" || !c.subscription_status
   ).length;
 
+  const paginatedCompanies = useMemo(() => {
+    const start = (currentPage - 1) * 10;
+    return companies.slice(start, start + 10);
+  }, [companies, currentPage]);
+
   return (
     <div className="space-y-6">
       {/* 1. TOPO DA PÁGINA */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      <div className="flex flex-col gap-4 pb-4 border-b border-slate-800/80">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
@@ -299,7 +335,7 @@ export default function CompaniesPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-end gap-3 w-full pt-1">
           <button
             onClick={() => fetchCompanies()}
             disabled={loading}
@@ -309,13 +345,15 @@ export default function CompaniesPage() {
             <span className="whitespace-nowrap">Atualizar</span>
           </button>
 
-          <Link
-            href="/sa/companies/new"
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/25 transition-all hover:scale-[1.02] active:scale-[0.98] shrink-0"
-          >
-            <Plus className="w-4 h-4 shrink-0" />
-            <span className="whitespace-nowrap">Nova Empresa</span>
-          </Link>
+          {can("companies", "create") && (
+            <Link
+              href="/sa/companies/new"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/25 transition-all hover:scale-[1.02] active:scale-[0.98] shrink-0"
+            >
+              <Plus className="w-4 h-4 shrink-0" />
+              <span className="whitespace-nowrap">Nova Empresa</span>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -436,7 +474,7 @@ export default function CompaniesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {companies.map((company) => (
+                {paginatedCompanies.map((company) => (
                   <tr
                     key={company.id}
                     className="hover:bg-slate-900/40 transition-colors group"
@@ -542,64 +580,125 @@ export default function CompaniesPage() {
 
                     {/* Status */}
                     <td className="px-5 py-4">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenStatusModal(company)}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all hover:scale-105 cursor-pointer ${
-                          company.status === "active"
-                            ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25"
-                            : company.status === "suspended"
-                            ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25"
-                            : "bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700"
-                        }`}
-                        title="Clique para alterar status"
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${
+                      {can("companies", "delete") ? (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenStatusModal(company)}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all hover:scale-105 cursor-pointer ${
                             company.status === "active"
-                              ? "bg-emerald-400 animate-pulse"
+                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25"
                               : company.status === "suspended"
-                              ? "bg-rose-400"
-                              : "bg-slate-500"
+                              ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25"
+                              : "bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700"
                           }`}
-                        />
-                        <span>
-                          {company.status === "active"
-                            ? "Ativa"
-                            : company.status === "suspended"
-                            ? "Suspensa"
-                            : "Inativa"}
+                          title="Clique para alterar status"
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              company.status === "active"
+                                ? "bg-emerald-400 animate-pulse"
+                                : company.status === "suspended"
+                                ? "bg-rose-400"
+                                : "bg-slate-500"
+                            }`}
+                          />
+                          <span>
+                            {company.status === "active"
+                              ? "Ativa"
+                              : company.status === "suspended"
+                              ? "Suspensa"
+                              : "Inativa"}
+                          </span>
+                          <ArrowUpDown className="w-2.5 h-2.5 ml-0.5 opacity-60" />
+                        </button>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            company.status === "active"
+                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                              : company.status === "suspended"
+                              ? "bg-rose-500/15 text-rose-300 border border-rose-500/30"
+                              : "bg-slate-800 text-slate-400 border border-slate-700"
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              company.status === "active"
+                                ? "bg-emerald-400"
+                                : company.status === "suspended"
+                                ? "bg-rose-400"
+                                : "bg-slate-500"
+                            }`}
+                          />
+                          <span>
+                            {company.status === "active"
+                              ? "Ativa"
+                              : company.status === "suspended"
+                              ? "Suspensa"
+                              : "Inativa"}
+                          </span>
                         </span>
-                        <ArrowUpDown className="w-2.5 h-2.5 ml-0.5 opacity-60" />
-                      </button>
+                      )}
                     </td>
 
                     {/* Ações */}
                     <td className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        <Link
-                          href={`/sa/companies/${company.id}`}
-                          className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors inline-block"
-                          title="Editar Empresa"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Link>
-                        <button
-                          onClick={() => {
-                            setCompanyToDelete(company);
-                            setDeleteModalOpen(true);
-                          }}
-                          className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                          title="Excluir Empresa"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {can("companies", "impersonate") && (
+                          <button
+                            type="button"
+                            onClick={() => handleImpersonate(company)}
+                            disabled={impersonatingId === company.id}
+                            className="p-2 rounded-xl text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 transition-all disabled:opacity-50 cursor-pointer"
+                            title={`Impersonalizar painel de "${company.name}"`}
+                          >
+                            {impersonatingId === company.id ? (
+                              <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
+                            ) : (
+                              <ExternalLink className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
+                        {can("companies", "edit") && (
+                          <Link
+                            href={`/sa/companies/${company.id}`}
+                            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors inline-block"
+                            title="Editar Empresa"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Link>
+                        )}
+                        {can("companies", "delete") && (
+                          <button
+                            onClick={() => {
+                              setCompanyToDelete(company);
+                              setDeleteModalOpen(true);
+                            }}
+                            className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                            title="Excluir Empresa"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {!can("companies", "impersonate") && !can("companies", "edit") && !can("companies", "delete") && (
+                          <span className="text-[11px] text-slate-600 italic">Somente leitura</span>
+                        )}
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+
+            {/* Paginação Padrão de 10 Itens */}
+            {!loading && companies.length > 0 && (
+              <Pagination
+                currentPage={currentPage}
+                totalItems={companies.length}
+                pageSize={10}
+                onPageChange={(page) => setCurrentPage(page)}
+              />
+            )}
           </div>
         )}
       </div>

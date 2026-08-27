@@ -46,6 +46,7 @@ export async function GET(request: Request) {
     });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Erro ao listar planos";
+    console.error("Erro na rota GET /api/sa/plans:", error);
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }

@@ -15,8 +15,8 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
-import { SaPageHeader } from "@/components/sa/SaPageHeader";
 import { maskPhone } from "@/lib/validators";
+import { Pagination } from "@/components/ui/Pagination";
 
 interface Instance {
   id: number;
@@ -54,6 +54,8 @@ export default function InstancesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [companyFilter, setCompanyFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   // Modal de Confirmação de Ação (Desconectar)
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
@@ -106,8 +108,14 @@ export default function InstancesPage() {
   }, [searchTerm, statusFilter, companyFilter, showError]);
 
   useEffect(() => {
+    setCurrentPage(1);
     fetchInstances();
   }, [fetchInstances]);
+
+  const paginatedInstances = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return instances.slice(startIndex, startIndex + pageSize);
+  }, [instances, currentPage, pageSize]);
 
   // Polling em tempo real a cada 4 segundos
   useEffect(() => {
@@ -225,16 +233,35 @@ export default function InstancesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Cabeçalho Padrão (Sem botão Criar Instância) */}
-      <SaPageHeader
-        title="Instâncias WhatsApp"
-        subtitle="Monitore servidores de conexão, status de sockets, QR Codes e telemetria de mensagens do WhatsApp por empresa."
-        icon={Server}
-        badgeText="Infraestrutura"
-        badgeVariant="purple"
-        onRefresh={fetchInstances}
-        loading={loading}
-      />
+      {/* 1. CABEÇALHO PADRÃO DO SISTEMA */}
+      <div className="flex flex-col gap-4 pb-4 border-b border-slate-800/80">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
+              <Server className="w-6 h-6 text-indigo-400" />
+              Instâncias WhatsApp
+            </h1>
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+          </div>
+          <p className="text-xs text-slate-400 mt-1">
+            Monitore servidores de conexão, status de sockets, QR Codes e telemetria de mensagens do WhatsApp por empresa.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 w-full pt-1">
+          <button
+            onClick={() => fetchInstances()}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all focus:outline-none disabled:opacity-50 shrink-0 cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${loading ? "animate-spin" : ""}`} />
+            <span className="whitespace-nowrap">Atualizar</span>
+          </button>
+        </div>
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -288,30 +315,30 @@ export default function InstancesPage() {
       </div>
 
       {/* Barra de Filtros e Busca */}
-      <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+      <div className="rounded-2xl bg-[#090f1d]/90 border border-slate-800/80 p-4 flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             type="text"
             placeholder="Buscar por nome, chave, whatsapp ou empresa..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-950/60 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/80 transition-all"
+            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-slate-900/90 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50"
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {/* Filtro por Empresa */}
-          <div className="flex items-center gap-2">
-            <Building2 className="w-3.5 h-3.5 text-slate-400" />
+          <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl w-full sm:w-auto">
+            <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <select
               value={companyFilter}
               onChange={(e) => setCompanyFilter(e.target.value)}
-              className="bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 transition-all"
+              className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer w-full"
             >
-              <option value="all">Todas as Empresas</option>
+              <option value="all" className="bg-slate-900 text-slate-200">Todas as Empresas</option>
               {companies.map((c) => (
-                <option key={c.id} value={c.id}>
+                <option key={c.id} value={c.id} className="bg-slate-900 text-slate-200">
                   {c.trade_name || c.name}
                 </option>
               ))}
@@ -319,19 +346,19 @@ export default function InstancesPage() {
           </div>
 
           {/* Filtro por Status */}
-          <div className="flex items-center gap-2">
-            <Filter className="w-3.5 h-3.5 text-slate-400" />
+          <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl w-full sm:w-auto">
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 transition-all"
+              className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer w-full"
             >
-              <option value="all">Todos os Status</option>
-              <option value="connected">Conectadas</option>
-              <option value="connecting">Conectando</option>
-              <option value="qrcode">Aguardando QR</option>
-              <option value="disconnected">Desconectadas</option>
-              <option value="banned">Banidas</option>
+              <option value="all" className="bg-slate-900 text-slate-200">Todos os Status</option>
+              <option value="connected" className="bg-slate-900 text-slate-200">Conectadas</option>
+              <option value="connecting" className="bg-slate-900 text-slate-200">Conectando</option>
+              <option value="qrcode" className="bg-slate-900 text-slate-200">Aguardando QR</option>
+              <option value="disconnected" className="bg-slate-900 text-slate-200">Desconectadas</option>
+              <option value="banned" className="bg-slate-900 text-slate-200">Banidas</option>
             </select>
           </div>
         </div>
@@ -357,19 +384,26 @@ export default function InstancesPage() {
             </div>
           </div>
         ) : (
-          <div className="w-full overflow-hidden">
-            <table className="w-full text-left text-xs table-auto">
+          <div className="w-full">
+            <table className="w-full text-left text-xs table-fixed">
+              <colgroup>
+                <col className="w-[30%]" />
+                <col className="w-[24%]" />
+                <col className="w-[18%]" />
+                <col className="w-[12%]" />
+                <col className="w-[16%]" />
+              </colgroup>
               <thead className="bg-[#0b1222] border-b border-slate-800/90 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
                 <tr>
-                  <th className="pl-6 pr-4 py-3.5 whitespace-nowrap">Empresa / WhatsApp</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap">Perfil do WhatsApp</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap">Número Conectado</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap">Status</th>
-                  <th className="pl-4 pr-6 py-3.5 text-right whitespace-nowrap">Ações</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Empresa / WhatsApp</th>
+                  <th className="px-3 py-3 whitespace-nowrap">Perfil</th>
+                  <th className="px-3 py-3 whitespace-nowrap">Número</th>
+                  <th className="px-3 py-3 whitespace-nowrap">Status</th>
+                  <th className="px-4 py-3 text-right whitespace-nowrap">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {instances.map((inst) => {
+                {paginatedInstances.map((inst) => {
                   const isConnected = inst.status === "connected";
                   const isConnecting = inst.status === "connecting" || inst.status === "qrcode";
 
@@ -379,18 +413,18 @@ export default function InstancesPage() {
                       className="hover:bg-slate-900/40 transition-colors group"
                     >
                       {/* Empresa / WhatsApp */}
-                      <td className="pl-6 pr-4 py-3.5">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-bold text-xs shrink-0">
-                            <Smartphone className="w-4 h-4" />
+                      <td className="px-4 py-3 min-w-0">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-bold text-xs shrink-0">
+                            <Smartphone className="w-3.5 h-3.5" />
                           </div>
-                          <div className="min-w-0 max-w-[200px]">
-                            <div className="text-xs text-white flex items-center gap-1.5 leading-tight truncate">
-                              <span className="font-semibold">{inst.company_trade_name || inst.company_name}</span>
-                              <span className="text-slate-500 font-normal">/</span>
-                              <span className="text-indigo-300 font-medium">{inst.name}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs text-white flex items-center gap-1 leading-tight truncate">
+                              <span className="font-semibold truncate">{inst.company_trade_name || inst.company_name}</span>
+                              <span className="text-slate-500 font-normal shrink-0">/</span>
+                              <span className="text-indigo-300 font-medium truncate">{inst.name}</span>
                             </div>
-                            <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-400">
+                            <div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-400 truncate">
                               <Building2 className="w-2.5 h-2.5 text-slate-500 shrink-0" />
                               <span className="truncate">{inst.company_name}</span>
                             </div>
@@ -399,24 +433,24 @@ export default function InstancesPage() {
                       </td>
 
                       {/* Perfil do WhatsApp */}
-                      <td className="px-4 py-3.5">
+                      <td className="px-3 py-3 min-w-0">
                         {isConnected ? (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
                             {inst.profile_picture_url ? (
                               /* eslint-disable-next-line @next/next/no-img-element */
                               <img
                                 src={inst.profile_picture_url}
                                 alt={inst.profile_name || "WhatsApp"}
-                                className="w-7 h-7 rounded-full object-cover border border-emerald-500/40 shrink-0 shadow-sm shadow-emerald-950/40"
+                                className="w-6 h-6 rounded-full object-cover border border-emerald-500/40 shrink-0 shadow-sm shadow-emerald-950/40"
                               />
                             ) : (
-                              <div className="w-7 h-7 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-[10px] shrink-0 shadow-inner">
+                              <div className="w-6 h-6 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-[9px] shrink-0 shadow-inner">
                                 {inst.profile_name
                                   ? inst.profile_name.slice(0, 2).toUpperCase()
-                                  : <Smartphone className="w-3.5 h-3.5" />}
+                                  : <Smartphone className="w-3 h-3" />}
                               </div>
                             )}
-                            <div className="min-w-0 max-w-[160px]">
+                            <div className="min-w-0 flex-1">
                               <p className="font-semibold text-white text-xs leading-tight truncate">
                                 {inst.profile_name || "WhatsApp Conectado"}
                               </p>
@@ -432,13 +466,13 @@ export default function InstancesPage() {
                       </td>
 
                       {/* Número Conectado */}
-                      <td className="px-4 py-3.5">
+                      <td className="px-3 py-3 whitespace-nowrap">
                         {isConnected ? (
-                          <div className="font-mono text-xs font-medium text-emerald-400 whitespace-nowrap">
+                          <div className="font-mono text-xs font-medium text-emerald-400">
                             {maskPhone(inst.phone_connected || inst.whatsapp_number || "") || "Número Ativo"}
                           </div>
                         ) : inst.whatsapp_number ? (
-                          <div className="font-mono text-xs text-slate-400 whitespace-nowrap">
+                          <div className="font-mono text-xs text-slate-400">
                             {maskPhone(inst.whatsapp_number)}
                           </div>
                         ) : (
@@ -447,19 +481,19 @@ export default function InstancesPage() {
                       </td>
 
                       {/* Status */}
-                      <td className="px-4 py-3.5">
+                      <td className="px-3 py-3 whitespace-nowrap">
                         {isConnected ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                             Conectada
                           </span>
                         ) : isConnecting ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
                             <RotateCw className="w-3 h-3 animate-spin shrink-0" />
                             Aguardando
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-slate-500/15 text-slate-400 border border-slate-500/30 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-500/15 text-slate-400 border border-slate-500/30">
                             <span className="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0" />
                             Desconectada
                           </span>
@@ -467,31 +501,31 @@ export default function InstancesPage() {
                       </td>
 
                       {/* Ações */}
-                      <td className="pl-4 pr-6 py-3.5 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
                           {isConnected ? (
                             <>
                               <button
                                 type="button"
                                 onClick={() => handleOpenTestModal(inst)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 transition-all cursor-pointer whitespace-nowrap shrink-0 shadow-sm"
+                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/40 hover:border-indigo-500/70 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0"
                                 title="Testar Envio de Mensagem no WhatsApp"
+                                aria-label="Testar Envio de Mensagem no WhatsApp"
                               >
-                                <Send className="w-3.5 h-3.5 shrink-0" />
-                                <span>Testar Envio</span>
+                                <Send className="w-4 h-4 shrink-0" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleOpenDisconnectModal(inst)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all cursor-pointer whitespace-nowrap shrink-0 shadow-sm"
+                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 hover:border-rose-500/60 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0"
                                 title="Desconectar WhatsApp"
+                                aria-label="Desconectar WhatsApp"
                               >
-                                <Power className="w-3.5 h-3.5 shrink-0" />
-                                <span>Desconectar</span>
+                                <Power className="w-4 h-4 shrink-0" />
                               </button>
                             </>
                           ) : (
-                            <span className="text-[11px] text-slate-500 italic pr-2 whitespace-nowrap">
+                            <span className="text-[11px] text-slate-500 italic whitespace-nowrap">
                               Conectar na Empresa
                             </span>
                           )}
@@ -503,6 +537,15 @@ export default function InstancesPage() {
               </tbody>
             </table>
           </div>
+        )}
+
+        {!loading && instances.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalItems={instances.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+          />
         )}
       </div>
 

@@ -69,6 +69,16 @@ export async function GET() {
        ORDER BY q.created_at ASC`
     );
 
+    // Auto-processa tarefas pendentes em background de forma assíncrona
+    const hasWaitingJobs = queueRows.some((q) => Number(q.waiting || 0) > 0);
+    if (hasWaitingJobs) {
+      import("@/lib/jobs-engine").then(({ processActiveQueues }) => {
+        processActiveQueues(undefined, 5).catch((err) => {
+          console.warn("Aviso no auto-processamento de filas:", err);
+        });
+      });
+    }
+
     // 2. Busca histórico das tarefas recentes persistidas
     const [jobRows] = await pool.execute<RowDataPacket[]>(
       `SELECT * FROM background_jobs ORDER BY created_at DESC LIMIT 50`
@@ -145,6 +155,13 @@ export async function POST(req: NextRequest) {
         [jobId]
       );
 
+      // Dispara o processamento imediato em background
+      import("@/lib/jobs-engine").then(({ processActiveQueues }) => {
+        processActiveQueues(undefined, 5).catch((err) => {
+          console.warn("Aviso ao auto-processar retry:", err);
+        });
+      });
+
       return NextResponse.json({
         success: true,
         message: `Tarefa #${jobId} reenfileirada para reprocessamento com sucesso.`,
@@ -159,6 +176,13 @@ export async function POST(req: NextRequest) {
          VALUES (?, ?, ?, ?, 'waiting', 0, 3, NOW())`,
         [id, queueName, jobName, JSON.stringify(payload || {})]
       );
+
+      // Dispara o processamento imediato em background
+      import("@/lib/jobs-engine").then(({ processActiveQueues }) => {
+        processActiveQueues(queueName, 5).catch((err) => {
+          console.warn("Aviso ao auto-processar novo job:", err);
+        });
+      });
 
       return NextResponse.json({
         success: true,

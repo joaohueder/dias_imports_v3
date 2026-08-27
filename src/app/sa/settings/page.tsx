@@ -15,8 +15,10 @@ import { SaPageHeader } from "@/components/sa/SaPageHeader";
 import { FloatingActionBar } from "@/components/ui/FloatingActionBar";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 import { useLayout, LayoutPreset } from "@/context/LayoutContext";
+import { useSaAuth } from "@/context/SaAuthContext";
 
 export default function SaSettingsPage() {
+  const { can } = useSaAuth();
   const {
     savedSettings,
     setPreviewSettings,
@@ -389,13 +391,15 @@ export default function SaSettingsPage() {
       </div>
 
       {/* Barra Flutuante de Ações */}
-      <FloatingActionBar
-        isVisible={isDirty}
-        onSave={handleSave}
-        onCancel={handleCancel}
-        isSubmitting={isSubmitting}
-        saveLabel="Salvar Largura"
-      />
+      {can("settings", "edit") && (
+        <FloatingActionBar
+          isVisible={isDirty}
+          onSave={handleSave}
+          onCancel={handleCancel}
+          isSubmitting={isSubmitting}
+          saveLabel="Salvar Largura"
+        />
+      )}
     </div>
   );
 }

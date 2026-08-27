@@ -80,7 +80,7 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
       }
 
       setSuccessMessage("Login autorizado! Redirecionando...");
-      window.location.href = data.redirectTo || "/sa";
+      window.location.href = data.redirectTo || "/sa/inicio";
     } catch (err: any) {
       const errMsg = err?.message || String(err);
       setErrorMessage(`Erro ao conectar: ${errMsg}`);

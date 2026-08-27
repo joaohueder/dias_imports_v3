@@ -10,7 +10,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireSaPermission("subscriptions", "edit");
+    const auth = await requireSaPermission("subscriptions", "delete");
     if (!auth.authorized) return auth.response;
 
     await initAuthDatabase();

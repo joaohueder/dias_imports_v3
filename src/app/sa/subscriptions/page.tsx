@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Zap,
   Search,
+  Filter,
   CreditCard,
   Building2,
   Calendar,
@@ -22,6 +23,7 @@ import { toast } from "sonner";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 import { formatCurrencyBRL } from "@/lib/formatters";
 import { formatDocumentWithLabel } from "@/lib/validators";
+import { Pagination } from "@/components/ui/Pagination";
 
 interface Subscription {
   id: number;
@@ -49,6 +51,8 @@ export default function SubscriptionsPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("active");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   const fetchSubscriptions = useCallback(async () => {
     try {
@@ -72,6 +76,7 @@ export default function SubscriptionsPage() {
   }, [statusFilter, showError]);
 
   useEffect(() => {
+    setCurrentPage(1);
     fetchSubscriptions();
   }, [fetchSubscriptions]);
 
@@ -85,6 +90,11 @@ export default function SubscriptionsPage() {
       sub.company_document?.includes(term)
     );
   });
+
+  const paginatedSubscriptions = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredSubscriptions.slice(startIndex, startIndex + pageSize);
+  }, [filteredSubscriptions, currentPage, pageSize]);
 
   const subStatusLabels: Record<
     string,
@@ -136,7 +146,7 @@ export default function SubscriptionsPage() {
   return (
     <div className="space-y-6">
       {/* Header Principal */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      <div className="flex flex-col gap-4 pb-4 border-b border-slate-800/80">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
@@ -153,7 +163,7 @@ export default function SubscriptionsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-end gap-3 w-full pt-1">
           <button
             onClick={fetchSubscriptions}
             disabled={loading}
@@ -166,43 +176,33 @@ export default function SubscriptionsPage() {
       </div>
 
       {/* Filtros e Busca */}
-      <div className="flex flex-col sm:flex-row items-center gap-3">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+      <div className="rounded-2xl bg-[#090f1d]/90 border border-slate-800/80 p-4 flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             type="text"
-            placeholder="Buscar por empresa, CNPJ/CPF ou nome do plano..."
+            placeholder="Buscar por empresa, CNPJ/CPF ou plano..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/50 transition-all"
+            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-slate-900/90 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50"
           />
         </div>
 
-        {/* Abas Rápidas / Seletor de Status */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-900/80 border border-slate-800 rounded-xl w-full sm:w-auto overflow-x-auto">
-          {[
-            { id: "active", label: "Ativas" },
-            { id: "past_due", label: "Inadimplentes" },
-            { id: "canceled", label: "Canceladas" },
-            { id: "expired", label: "Expiradas" },
-            { id: "all", label: "Todas" },
-          ].map((tab) => {
-            const isSelected = statusFilter === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setStatusFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                  isSelected
-                    ? "bg-violet-600 text-white shadow-sm"
-                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl w-full sm:w-auto">
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer w-full"
+            >
+              <option value="all" className="bg-slate-900 text-slate-200">Todos os Status</option>
+              <option value="active" className="bg-slate-900 text-slate-200">Ativas</option>
+              <option value="past_due" className="bg-slate-900 text-slate-200">Inadimplentes</option>
+              <option value="canceled" className="bg-slate-900 text-slate-200">Canceladas</option>
+              <option value="expired" className="bg-slate-900 text-slate-200">Expiradas</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -243,33 +243,33 @@ export default function SubscriptionsPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-950/80 border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider">
+              <thead className="bg-[#0b1222] border-b border-slate-800/90 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
                 <tr>
-                  <th className="py-3.5 px-4 w-[28%]">Empresa / Tenant</th>
-                  <th className="py-3.5 px-4 w-[24%]">Plano & Cotas</th>
-                  <th className="py-3.5 px-4 w-[14%]">Valor</th>
-                  <th className="py-3.5 px-4 w-[12%]">Status</th>
-                  <th className="py-3.5 px-4 w-[14%]">Vigência</th>
-                  <th className="py-3.5 px-4 w-[8%] text-right">Ação</th>
+                  <th className="px-5 py-3.5 w-[28%]">Empresa / Tenant</th>
+                  <th className="px-5 py-3.5 w-[24%]">Plano & Cotas</th>
+                  <th className="px-5 py-3.5 w-[14%]">Valor</th>
+                  <th className="px-5 py-3.5 w-[12%]">Status</th>
+                  <th className="px-5 py-3.5 w-[14%]">Vigência</th>
+                  <th className="px-5 py-3.5 w-[8%] text-right">Ação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {filteredSubscriptions.map((sub) => {
+                {paginatedSubscriptions.map((sub) => {
                   const statusConfig = subStatusLabels[sub.status] || subStatusLabels.active;
                   const StatusIcon = statusConfig.icon;
                   const daysRemaining = getDaysRemaining(sub.current_period_end);
                   const isEndingSoon = sub.status === "active" && daysRemaining <= 7 && daysRemaining >= 0;
 
                   return (
-                    <tr key={sub.id} className="hover:bg-slate-800/30 transition-colors group">
+                    <tr key={sub.id} className="hover:bg-slate-900/40 transition-colors group">
                       {/* Empresa */}
-                      <td className="py-4 px-4 align-middle">
+                      <td className="px-5 py-4 align-middle">
                         <div className="flex items-center gap-3">
-                          <div className="p-2.5 rounded-xl bg-slate-800/80 text-violet-400 border border-slate-700/60 shrink-0 shadow-sm">
-                            <Building2 className="w-4 h-4" />
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-bold text-sm shrink-0">
+                            {sub.company_name?.slice(0, 2).toUpperCase() || "EP"}
                           </div>
                           <div className="min-w-0">
-                            <div className="font-bold text-white text-sm leading-snug group-hover:text-violet-300 transition-colors truncate">
+                            <div className="font-bold text-white text-sm leading-snug group-hover:text-indigo-300 transition-colors truncate">
                               {sub.company_trade_name || sub.company_name}
                             </div>
                             {sub.company_trade_name && (
@@ -287,7 +287,7 @@ export default function SubscriptionsPage() {
                       </td>
 
                       {/* Plano & Cotas */}
-                      <td className="py-4 px-4 align-middle">
+                      <td className="px-5 py-4 align-middle">
                         <div className="space-y-1.5">
                           <div className="font-bold text-indigo-300 text-sm flex items-center gap-2">
                             <span>{sub.plan_name}</span>
@@ -307,7 +307,7 @@ export default function SubscriptionsPage() {
                       </td>
 
                       {/* Valor & Método */}
-                      <td className="py-4 px-4 align-middle">
+                      <td className="px-5 py-4 align-middle">
                         <div className="font-black text-white text-sm tracking-tight">
                           {formatCurrencyBRL(sub.price_at_subscription)}
                         </div>
@@ -317,26 +317,26 @@ export default function SubscriptionsPage() {
                       </td>
 
                       {/* Status */}
-                      <td className="py-4 px-4 align-middle">
+                      <td className="px-5 py-4 align-middle">
                         <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border whitespace-nowrap shadow-sm ${statusConfig.bg} ${statusConfig.text} ${statusConfig.border}`}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap shadow-sm ${statusConfig.bg} ${statusConfig.text} ${statusConfig.border}`}
                         >
-                          <StatusIcon className="w-3.5 h-3.5" />
+                          <StatusIcon className="w-3 h-3" />
                           {statusConfig.label}
                         </span>
                       </td>
 
                       {/* Período / Vigência */}
-                      <td className="py-4 px-4 align-middle">
+                      <td className="px-5 py-4 align-middle">
                         <div className="space-y-1">
                           <div className="flex items-center gap-1.5 text-slate-300 whitespace-nowrap">
-                            <Calendar className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                            <Calendar className="w-3 h-3 text-indigo-400 shrink-0" />
                             <span className="text-[11px] text-slate-400">Início:</span>
                             <span className="text-[11px] text-white font-semibold">{formatDate(sub.current_period_start)}</span>
                           </div>
 
                           <div className="flex items-center gap-1.5 whitespace-nowrap">
-                            <Clock className={`w-3.5 h-3.5 shrink-0 ${isEndingSoon ? "text-amber-400" : "text-slate-400"}`} />
+                            <Clock className={`w-3 h-3 shrink-0 ${isEndingSoon ? "text-amber-400" : "text-slate-400"}`} />
                             <span className="text-[11px] text-slate-400">
                               {sub.status === "active" ? "Término:" : "Encerrou:"}
                             </span>
@@ -367,13 +367,13 @@ export default function SubscriptionsPage() {
                       </td>
 
                       {/* Ação */}
-                      <td className="py-4 px-4 align-middle text-right">
+                      <td className="px-5 py-4 align-middle text-right">
                         <Link
                           href={`/sa/companies/${sub.company_id}?tab=subscription`}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800/90 hover:bg-violet-600 text-slate-300 hover:text-white border border-slate-700/60 hover:border-violet-500 transition-all shadow-sm"
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800/90 hover:bg-indigo-600 text-slate-300 hover:text-white border border-slate-700/60 hover:border-indigo-500 transition-all shadow-sm active:scale-95"
+                          title="Gerenciar Assinatura"
                         >
-                          <span>Gerenciar</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
+                          <ArrowRight className="w-4 h-4" />
                         </Link>
                       </td>
                     </tr>
@@ -382,6 +382,15 @@ export default function SubscriptionsPage() {
               </tbody>
             </table>
           </div>
+        )}
+
+        {!loading && filteredSubscriptions.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredSubscriptions.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+          />
         )}
       </div>
     </div>

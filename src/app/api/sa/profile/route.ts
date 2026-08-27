@@ -3,6 +3,7 @@ import { getDbPool, initAuthDatabase } from "@/lib/db";
 import { getCurrentSaUser, verifySessionToken } from "@/lib/session";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
 import { cookies } from "next/headers";
+import { verifyPassword, hashPassword } from "@/lib/passwords";
 
 export const dynamic = "force-dynamic";
 
@@ -156,7 +157,8 @@ export async function PUT(request: Request) {
         );
       }
 
-      if (currentPassword !== storedPassword) {
+      const isCurrentValid = await verifyPassword(currentPassword, storedPassword);
+      if (!isCurrentValid) {
         return NextResponse.json(
           { success: false, error: "Senha atual incorreta." },
           { status: 401 }
@@ -177,7 +179,7 @@ export async function PUT(request: Request) {
         );
       }
 
-      passwordToUpdate = newPassword;
+      passwordToUpdate = await hashPassword(newPassword);
     }
 
     // 3. Validação de WhatsApp único se informado

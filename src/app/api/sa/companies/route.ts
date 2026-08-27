@@ -4,6 +4,7 @@ import { RowDataPacket, ResultSetHeader } from "mysql2";
 import { requireSaPermission } from "@/lib/server-permissions";
 import { createEvolutionInstance } from "@/lib/evolution";
 import crypto from "crypto";
+import { logAudit, getClientIpAndAgent } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -252,6 +253,21 @@ export async function POST(request: Request) {
     } catch (instError) {
       console.error("Aviso: Erro ao criar instância automática para a empresa:", instError);
     }
+
+    const { ip, userAgent } = getClientIpAndAgent(request);
+    await logAudit({
+      userId: auth.user.id,
+      userName: auth.user.name,
+      userEmail: auth.user.email,
+      userRole: auth.user.role,
+      action: "COMPANY_CREATE",
+      entityType: "companies",
+      entityId: companyId,
+      newValues: { name, trade_name, admin_whatsapp: cleanAdminWhatsapp, plan, status },
+      ipAddress: ip,
+      userAgent,
+      status: "success",
+    });
 
     return NextResponse.json({
       success: true,

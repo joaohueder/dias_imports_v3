@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { SaPageHeader } from "@/components/sa/SaPageHeader";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
+import { useSaAuth } from "@/context/SaAuthContext";
 import { maskPhone } from "@/lib/validators";
 
 interface InstanceData {
@@ -51,6 +52,7 @@ interface InstanceData {
 }
 
 export default function SaDefaultInstancePage() {
+  const { can } = useSaAuth();
   const { showSuccess, showError, showWarning } = useFeedbackModal();
 
   // Estados da Instância Padrão
@@ -319,19 +321,25 @@ export default function SaDefaultInstancePage() {
             </div>
 
             <div className="pt-2">
-              <button
-                type="button"
-                onClick={handleCreateInstanceDirect}
-                disabled={actionLoading}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 hover:scale-105 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
-              >
-                {actionLoading ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Plus className="w-4 h-4" />
-                )}
-                <span>{actionLoading ? "Criando Instância..." : "Criar Instância Padrão do Sistema"}</span>
-              </button>
+              {can("default_instance", "create") ? (
+                <button
+                  type="button"
+                  onClick={handleCreateInstanceDirect}
+                  disabled={actionLoading}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 hover:scale-105 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
+                >
+                  {actionLoading ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  <span>{actionLoading ? "Criando Instância..." : "Criar Instância Padrão do Sistema"}</span>
+                </button>
+              ) : (
+                <p className="text-xs text-slate-500 italic">
+                  Você não possui permissão para criar a instância padrão do sistema.
+                </p>
+              )}
             </div>
           </div>
         ) : (
@@ -439,60 +447,66 @@ export default function SaDefaultInstancePage() {
               {/* Ações da Instância - Padronizadas com a Tela de Empresas */}
               <div className="flex items-center justify-between gap-2 pt-4 mt-4 border-t border-slate-800/60">
                 <div className="flex items-center gap-2 flex-wrap">
-                  {defaultInstance.status === "connected" ? (
+                  {can("default_instance", "edit") && (
                     <>
+                      {defaultInstance.status === "connected" ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setTestModalOpen(true)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 transition-all cursor-pointer whitespace-nowrap"
+                            title="Testar Envio de Mensagem no WhatsApp"
+                          >
+                            <Send className="w-3.5 h-3.5 shrink-0" />
+                            <span>Testar Envio</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDisconnectModalOpen(true)}
+                            disabled={actionLoading}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all cursor-pointer whitespace-nowrap"
+                            title="Desconectar WhatsApp"
+                          >
+                            <Power className="w-3.5 h-3.5 shrink-0" />
+                            <span>Desconectar</span>
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleOpenQrModal}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 transition-all cursor-pointer whitespace-nowrap"
+                          title="Gerar QR Code para Leitura"
+                        >
+                          <QrCode className="w-3.5 h-3.5 shrink-0" />
+                          <span>Gerar QRCode</span>
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => setTestModalOpen(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 transition-all cursor-pointer whitespace-nowrap"
-                        title="Testar Envio de Mensagem no WhatsApp"
-                      >
-                        <Send className="w-3.5 h-3.5 shrink-0" />
-                        <span>Testar Envio</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDisconnectModalOpen(true)}
+                        onClick={() => setRestartModalOpen(true)}
                         disabled={actionLoading}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all cursor-pointer whitespace-nowrap"
-                        title="Desconectar WhatsApp"
+                        className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80 transition-colors cursor-pointer"
+                        title="Reiniciar Instância"
                       >
-                        <Power className="w-3.5 h-3.5 shrink-0" />
-                        <span>Desconectar</span>
+                        <RotateCw className={`w-3.5 h-3.5 shrink-0 ${actionLoading ? "animate-spin text-indigo-400" : ""}`} />
                       </button>
                     </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleOpenQrModal}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 transition-all cursor-pointer whitespace-nowrap"
-                      title="Gerar QR Code para Leitura"
-                    >
-                      <QrCode className="w-3.5 h-3.5 shrink-0" />
-                      <span>Gerar QRCode</span>
-                    </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setRestartModalOpen(true)}
-                    disabled={actionLoading}
-                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80 transition-colors cursor-pointer"
-                    title="Reiniciar Instância"
-                  >
-                    <RotateCw className={`w-3.5 h-3.5 shrink-0 ${actionLoading ? "animate-spin text-indigo-400" : ""}`} />
-                  </button>
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setDeleteModalOpen(true)}
-                    disabled={actionLoading}
-                    className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors cursor-pointer"
-                    title="Excluir Instância"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                  </button>
+                  {can("default_instance", "delete") && (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteModalOpen(true)}
+                      disabled={actionLoading}
+                      className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors cursor-pointer"
+                      title="Excluir Instância"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

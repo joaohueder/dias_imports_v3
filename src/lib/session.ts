@@ -42,43 +42,28 @@ export function verifySessionToken(token: string): { id: number; email: string; 
 export async function getCurrentSaUser(): Promise<CurrentUserSession | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get("sa_auth_token")?.value;
-  const legacyUserId = cookieStore.get("sa_user_id")?.value;
-  const legacyUserEmail = cookieStore.get("sa_user_email")?.value;
 
-  let targetId: number | null = null;
-  let targetEmail: string | null = null;
-
-  if (token) {
-    const verified = verifySessionToken(token);
-    if (verified) {
-      targetId = verified.id;
-      targetEmail = verified.email;
-    }
+  if (!token) {
+    return null;
   }
 
-  if (!targetEmail && legacyUserEmail) {
-    targetEmail = decodeURIComponent(legacyUserEmail);
-  }
-  if (!targetId && legacyUserId) {
-    targetId = parseInt(legacyUserId, 10);
+  const verified = verifySessionToken(token);
+  if (!verified) {
+    return null;
   }
 
-  if (!targetId && !targetEmail) {
-    targetEmail = "joaohueder@gmail.com";
-  }
+  const targetId = verified.id;
+  const targetEmail = verified.email;
 
   const pool = getDbPool();
 
   try {
-    const query = targetId
-      ? "SELECT id, name, email, role, status, company_id, permissions FROM users WHERE id = ? LIMIT 1"
-      : "SELECT id, name, email, role, status, company_id, permissions FROM users WHERE email = ? LIMIT 1";
-    const param = targetId || targetEmail;
-
-    const [rows] = await pool.query<RowDataPacket[]>(query, [param]);
+    const query = "SELECT id, name, email, role, status, company_id, permissions FROM users WHERE id = ? AND email = ? LIMIT 1";
+    const [rows] = await pool.query<RowDataPacket[]>(query, [targetId, targetEmail]);
     if (rows.length > 0) {
       const user = rows[0];
       if (user.status !== "active") return null;
+      if (user.role !== "SUPER_ADMIN" && user.role !== "ADMIN") return null;
 
       let permissions: Record<string, Record<string, boolean>> | null = null;
       if (user.permissions) {
@@ -101,19 +86,83 @@ export async function getCurrentSaUser(): Promise<CurrentUserSession | null> {
     }
   } catch (err) {
     console.error("Erro ao buscar sessão do usuário:", err);
-    // Em caso de falha de conexão com o banco no ambiente de desenvolvimento, provê fallback seguro do Super Admin inicial
-    if (targetEmail === "joaohueder@gmail.com" || (!targetId && !token)) {
-      return {
-        id: 1,
-        name: "João Hueder",
-        email: "joaohueder@gmail.com",
-        role: "SUPER_ADMIN",
-        company_id: null,
-        permissions: null,
-        system_role: "SUPER_ADMIN",
-      };
-    }
   }
 
   return null;
+}
+
+export async function getCurrentCompanyUser(): Promise<CurrentUserSession | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("company_auth_token")?.value || cookieStore.get("sa_auth_token")?.value;
+
+  if (!token) {
+    return null;
+  }
+
+  const verified = verifySessionToken(token);
+  if (!verified) {
+    return null;
+  }
+
+  const targetId = verified.id;
+  const targetEmail = verified.email;
+
+  const pool = getDbPool();
+
+  try {
+    const query = "SELECT id, name, email, role, status, company_id, permissions FROM users WHERE id = ? AND email = ? LIMIT 1";
+    const [rows] = await pool.query<RowDataPacket[]>(query, [targetId, targetEmail]);
+    if (rows.length > 0) {
+      const user = rows[0];
+      if (user.status !== "active") return null;
+
+      let permissions: Record<string, Record<string, boolean>> | null = null;
+      if (user.permissions) {
+        try {
+          permissions = typeof user.permissions === "string" ? JSON.parse(user.permissions) : user.permissions;
+        } catch {
+          permissions = null;
+        }
+      }
+
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        company_id: user.company_id,
+        permissions,
+        system_role: user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : user.role === "ADMIN" ? "ADMIN" : null,
+      };
+    }
+  } catch (err) {
+    console.error("Erro ao buscar sessão do usuário da empresa:", err);
+  }
+
+  return null;
+}
+
+/**
+ * Resolve com segurança o company_id para operações no Painel do Tenant.
+ * - Usuários normais (COMPANY_ADMIN, USER): OBRIGATORIAMENTE usam user.company_id.
+ * - Super Admins ou Admins globais: Podem usar cookie de impersonate se existir, senão user.company_id ou default.
+ */
+export async function getEffectiveCompanyId(
+  user: CurrentUserSession,
+  cookieStore?: { get: (name: string) => { value: string } | undefined }
+): Promise<number | null> {
+  const isGlobalAdmin = user.role === "SUPER_ADMIN" || user.role === "ADMIN" || user.system_role === "SUPER_ADMIN";
+
+  if (isGlobalAdmin) {
+    const cookiesObj = cookieStore || (await cookies());
+    const impersonateCookie = cookiesObj.get("company_id")?.value;
+    if (impersonateCookie) {
+      const parsed = parseInt(impersonateCookie, 10);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+    return user.company_id || 1;
+  }
+
+  // Tenant/Usuário regular: sempre restrito ao seu próprio tenant
+  return user.company_id || null;
 }

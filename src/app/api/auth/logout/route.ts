@@ -1,9 +1,30 @@
 import { NextResponse } from "next/server";
+import { getCurrentSaUser } from "@/lib/session";
+import { logAudit, getClientIpAndAgent } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentSaUser();
+    const { ip, userAgent } = getClientIpAndAgent(request);
+
+    if (user) {
+      await logAudit({
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        userRole: user.role,
+        companyId: user.company_id,
+        action: "AUTH_LOGOUT",
+        entityType: "auth",
+        entityId: user.id,
+        ipAddress: ip,
+        userAgent,
+        status: "success",
+      });
+    }
+
     const response = NextResponse.json({
       success: true,
       message: "Sessão encerrada com sucesso.",
@@ -14,6 +35,9 @@ export async function POST(request: Request) {
       "sa_auth_token",
       "sa_user_id",
       "sa_user_email",
+      "company_auth_token",
+      "company_user_id",
+      "company_id",
       "auth_token",
       "session_token",
       "sa_session",

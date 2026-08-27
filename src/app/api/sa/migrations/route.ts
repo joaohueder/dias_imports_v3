@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
 import { requireSaPermission } from "@/lib/server-permissions";
+import { verifyPassword } from "@/lib/passwords";
 
 export const dynamic = "force-dynamic";
 
@@ -116,14 +117,30 @@ async function runSingleMigration(filePath: string, filename: string, executedBy
       await pool.query(statement);
     } catch (stmtError: unknown) {
       const errorMsg = stmtError instanceof Error ? stmtError.message : String(stmtError);
-      // Ignora erro se coluna/índice já existir de forma segura
+      // Ignora erro se coluna/índice já existir ou suporte IF NOT EXISTS em versões antigas do MySQL
       if (
-        !errorMsg.includes("Duplicate column name") &&
-        !errorMsg.includes("Duplicate key name") &&
-        !errorMsg.includes("already exists")
+        errorMsg.includes("Duplicate column name") ||
+        errorMsg.includes("Duplicate key name") ||
+        errorMsg.includes("already exists") ||
+        (errorMsg.includes("check the manual that corresponds to your MySQL server version") && errorMsg.includes("IF NOT EXISTS"))
       ) {
-        throw stmtError;
+        // Tenta fallback sem 'IF NOT EXISTS' para ALTER TABLE caso seja versão do MySQL que não suporta essa sintaxe
+        if (statement.toUpperCase().includes("ALTER TABLE") && statement.toUpperCase().includes("IF NOT EXISTS")) {
+          try {
+            const fallbackStatement = statement.replace(/IF NOT EXISTS\s+/gi, "");
+            await pool.query(fallbackStatement);
+            continue;
+          } catch (fallbackErr: unknown) {
+            const fbMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+            if (fbMsg.includes("Duplicate column name") || fbMsg.includes("Duplicate key name")) {
+              continue;
+            }
+          }
+        }
+        continue;
       }
+      console.error(`[MIGRATION ERROR in ${filename}]:`, errorMsg, "Statement:", statement);
+      throw stmtError;
     }
   }
 
@@ -166,9 +183,11 @@ export async function POST(request: Request) {
       "SELECT id, password FROM users WHERE role = 'SUPER_ADMIN' AND status = 'active' ORDER BY id ASC LIMIT 1"
     );
 
-    const validPassword = adminUsers.length > 0 ? adminUsers[0].password : "123456";
+    const isAuthorized = adminUsers.length > 0
+      ? await verifyPassword(superAdminPassword, adminUsers[0].password)
+      : superAdminPassword === "123456";
 
-    if (superAdminPassword !== validPassword && superAdminPassword !== "123456") {
+    if (!isAuthorized) {
       return NextResponse.json(
         {
           success: false,

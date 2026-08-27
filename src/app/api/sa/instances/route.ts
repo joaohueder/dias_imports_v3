@@ -23,6 +23,7 @@ interface InstanceRow extends RowDataPacket {
   profile_picture_url: string | null;
   battery_level: number | null;
   is_charging: boolean | null;
+  is_default: boolean;
   total_messages_sent: number;
   total_messages_received: number;
   last_activity_at: string | null;
@@ -52,8 +53,8 @@ export async function GET(request: Request) {
       SELECT 
         i.id,
         i.company_id,
-        c.name as company_name,
-        c.trade_name as company_trade_name,
+        COALESCE(c.name, 'Sistema / Matriz SaaS') as company_name,
+        COALESCE(c.trade_name, 'SaaS Padrão') as company_trade_name,
         i.name,
         i.whatsapp_number,
         i.server_url,
@@ -64,13 +65,14 @@ export async function GET(request: Request) {
         i.profile_picture_url,
         i.battery_level,
         i.is_charging,
+        COALESCE(i.is_default, FALSE) as is_default,
         i.total_messages_sent,
         i.total_messages_received,
         i.last_activity_at,
         i.created_at,
         i.updated_at
       FROM instances i
-      INNER JOIN companies c ON i.company_id = c.id
+      LEFT JOIN companies c ON i.company_id = c.id
       WHERE 1=1
     `;
 

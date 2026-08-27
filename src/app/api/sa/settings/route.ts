@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbPool } from "@/lib/db";
-import { getCurrentSaUser } from "@/lib/session";
+import { requireSaPermission } from "@/lib/server-permissions";
 import { RowDataPacket } from "mysql2";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getCurrentSaUser();
-    if (!session) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    const auth = await requireSaPermission("settings", "view");
+    if (!auth.authorized) {
+      return auth.response;
     }
 
     const pool = getDbPool();
@@ -60,17 +60,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getCurrentSaUser();
-    if (!session) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
-
-    // Apenas SUPER_ADMIN pode salvar parâmetros globais do SaaS
-    if (session.role !== "SUPER_ADMIN") {
-      return NextResponse.json(
-        { error: "Acesso negado. Apenas Super Admin pode alterar parâmetros globais." },
-        { status: 403 }
-      );
+    const auth = await requireSaPermission("settings", "edit");
+    if (!auth.authorized) {
+      return auth.response;
     }
 
     const body = await request.json();

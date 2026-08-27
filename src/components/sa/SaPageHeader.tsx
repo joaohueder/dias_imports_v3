@@ -46,8 +46,8 @@ export function SaPageHeader({
   const isCurrentlyRefreshing = isRefreshing || loading;
   const allExtraActions = extraActions || actions;
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
-      <div>
+    <div className="flex flex-col gap-4 pb-4 border-b border-slate-800/80">
+      <div className="w-full">
         <div className="flex items-center gap-2.5">
           {Icon && (
             <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
@@ -65,46 +65,48 @@ export function SaPageHeader({
           )}
         </div>
         {displaySubtitle && (
-          <p className="text-xs text-slate-400 mt-1 max-w-3xl leading-relaxed">
+          <p className="text-xs text-slate-400 mt-1 max-w-4xl leading-relaxed">
             {displaySubtitle}
           </p>
         )}
       </div>
 
-      <div className="flex items-center gap-3 shrink-0">
-        {allExtraActions}
+      {(allExtraActions || onRefresh || primaryAction) && (
+        <div className="flex flex-wrap items-center justify-end gap-2.5 w-full pt-1">
+          {allExtraActions}
 
-        {onRefresh && (
-          <button
-            onClick={onRefresh}
-            disabled={isCurrentlyRefreshing}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all focus:outline-none disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isCurrentlyRefreshing ? "animate-spin" : ""}`} />
-            <span className="whitespace-nowrap">{refreshLabel}</span>
-          </button>
-        )}
-
-        {primaryAction && (
-          primaryAction.href ? (
-            <a
-              href={primaryAction.href}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/25 transition-all hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              {primaryAction.icon && React.createElement(primaryAction.icon, { className: "w-3.5 h-3.5 shrink-0" })}
-              <span className="whitespace-nowrap">{primaryAction.label}</span>
-            </a>
-          ) : (
+          {onRefresh && (
             <button
-              onClick={primaryAction.onClick}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/25 transition-all hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer"
+              onClick={onRefresh}
+              disabled={isCurrentlyRefreshing}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all focus:outline-none disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
             >
-              {primaryAction.icon && React.createElement(primaryAction.icon, { className: "w-3.5 h-3.5 shrink-0" })}
-              <span className="whitespace-nowrap">{primaryAction.label}</span>
+              <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isCurrentlyRefreshing ? "animate-spin" : ""}`} />
+              <span className="whitespace-nowrap">{refreshLabel}</span>
             </button>
-          )
-        )}
-      </div>
+          )}
+
+          {primaryAction && (
+            primaryAction.href ? (
+              <a
+                href={primaryAction.href}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/25 transition-all hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                {primaryAction.icon && React.createElement(primaryAction.icon, { className: "w-3.5 h-3.5 shrink-0" })}
+                <span className="whitespace-nowrap">{primaryAction.label}</span>
+              </a>
+            ) : (
+              <button
+                onClick={primaryAction.onClick}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/25 transition-all hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                {primaryAction.icon && React.createElement(primaryAction.icon, { className: "w-3.5 h-3.5 shrink-0" })}
+                <span className="whitespace-nowrap">{primaryAction.label}</span>
+              </button>
+            )
+          )}
+        </div>
+      )}
     </div>
   );
 }

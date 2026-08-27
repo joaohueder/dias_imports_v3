@@ -95,20 +95,20 @@ export function EvolutionStatusIndicator() {
         )}
 
         {status === "online" && (
-          <span className="inline-flex items-center gap-1 text-indigo-400 font-semibold">
+          <span className="inline-flex items-center gap-1 text-emerald-400 font-semibold">
             <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
             </span>
             <span>Online</span>
           </span>
         )}
 
         {status === "degraded" && (
-          <span className="inline-flex items-center gap-1 text-amber-400 font-semibold">
+          <span className="inline-flex items-center gap-1 text-rose-400 font-semibold underline decoration-rose-500/40 underline-offset-2">
             <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500" />
             </span>
             <span>Instável</span>
           </span>

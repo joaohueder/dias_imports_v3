@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDbPool, initAuthDatabase } from "@/lib/db";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
 import { requireSaPermission } from "@/lib/server-permissions";
+import { hashPassword } from "@/lib/passwords";
 
 export const dynamic = "force-dynamic";
 
@@ -143,6 +144,7 @@ export async function POST(request: Request) {
     }
 
     const userPermissions = role === "SUPER_ADMIN" ? null : permissions || {};
+    const hashedPassword = await hashPassword(password.trim());
 
     const [result] = await pool.query<ResultSetHeader>(
       `INSERT INTO users (name, email, whatsapp, password, role, permissions, status)
@@ -151,7 +153,7 @@ export async function POST(request: Request) {
         name.trim(),
         cleanEmail,
         cleanWhatsapp,
-        password.trim(),
+        hashedPassword,
         role,
         userPermissions ? JSON.stringify(userPermissions) : null,
         status === "inactive" ? "inactive" : "active",

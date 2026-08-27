@@ -43,6 +43,14 @@ export function maskZipcode(value: string): string {
   return digits.replace(/(\d{5})(\d)/, "$1-$2");
 }
 
+export const maskCep = maskZipcode;
+export const maskCnpjCpf = maskCpfCnpj;
+
+export function unmask(value: string | null | undefined): string {
+  if (!value) return "";
+  return value.replace(/\D/g, "");
+}
+
 export function formatDocumentWithLabel(value: string | null | undefined): string {
   if (!value) return "";
   const digits = value.replace(/\D/g, "");

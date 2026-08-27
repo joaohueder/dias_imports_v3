@@ -65,9 +65,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireSaPermission("instances", "view");
-    if (!auth.authorized) return auth.response;
-
     const { id } = await params;
     const pool = getDbPool();
     const { searchParams } = new URL(request.url);
@@ -86,6 +83,11 @@ export async function GET(
     }
 
     const instance = rows[0];
+
+    // Se for instância padrão, validar permissão 'default_instance' ou 'instances' com ação 'edit'
+    const moduleReq = instance.is_default ? "default_instance" : "instances";
+    const auth = await requireSaPermission(moduleReq, "edit");
+    if (!auth.authorized) return auth.response;
 
     // Se solicitado reiniciar ao abrir o modal, invocar restart na Evolution API
     if (shouldRestart && instance.name) {

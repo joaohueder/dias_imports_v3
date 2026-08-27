@@ -145,7 +145,7 @@ export default function SuperAdminProfilePage() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto pb-12">
       {/* 1. CABEÇALHO */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      <div className="flex flex-col gap-4 pb-4 border-b border-slate-800/80">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
@@ -162,13 +162,15 @@ export default function SuperAdminProfilePage() {
           </p>
         </div>
 
-        <Link
-          href="/sa"
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-all self-start sm:self-auto"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Voltar ao Dashboard</span>
-        </Link>
+        <div className="flex items-center justify-end gap-3 w-full pt-1">
+          <Link
+            href="/sa"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-all shrink-0 cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span className="whitespace-nowrap">Voltar ao Dashboard</span>
+          </Link>
+        </div>
       </div>
 
       {loading ? (

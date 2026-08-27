@@ -158,6 +158,104 @@ export async function initAuthDatabase(): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
+  // Cria tabela de produtos do catálogo da empresa se não existir
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS company_products (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      company_id INT NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      slug VARCHAR(255) NOT NULL,
+      description TEXT NULL,
+      price DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+      promo_price DECIMAL(10, 2) NULL,
+      status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+      images JSON NULL,
+      cover_image TEXT NULL,
+      whatsapp_destination VARCHAR(50) NULL DEFAULT 'default',
+      meta_ads_active BOOLEAN NOT NULL DEFAULT FALSE,
+      layout_color VARCHAR(50) NULL DEFAULT '#6366f1',
+      layout_theme VARCHAR(50) NULL DEFAULT 'dark',
+      layout_font VARCHAR(50) NULL DEFAULT 'sans_modern',
+      cta_text VARCHAR(100) NULL DEFAULT 'Comprar no WhatsApp',
+      cta_icon VARCHAR(50) NULL DEFAULT 'arrow-right',
+      cta_animation VARCHAR(50) NULL DEFAULT 'none',
+      headline VARCHAR(255) NULL,
+      guarantee_text VARCHAR(255) NULL,
+      benefits JSON NULL,
+      benefits_icon VARCHAR(50) NULL DEFAULT 'check',
+      offer_box_style VARCHAR(50) NULL DEFAULT 'model_1',
+      external_link TEXT NULL,
+      sends_count INT NOT NULL DEFAULT 0,
+      views_count INT NOT NULL DEFAULT 0,
+      clicks_count INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_company_products_company (company_id),
+      INDEX idx_company_products_slug (company_id, slug)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  // Garante a coluna sends_count se a tabela já existia antes
+  try {
+    await db.query(`
+      ALTER TABLE company_products 
+      ADD COLUMN sends_count INT NOT NULL DEFAULT 0 AFTER external_link;
+    `);
+  } catch {
+    // Coluna já existente
+  }
+
+  // Garante a coluna benefits_icon se a tabela já existia antes
+  try {
+    await db.query(`
+      ALTER TABLE company_products 
+      ADD COLUMN benefits_icon VARCHAR(50) NULL DEFAULT 'check' AFTER benefits;
+    `);
+  } catch {
+    // Coluna já existente
+  }
+
+  // Garante a coluna offer_box_style se a tabela já existia antes
+  try {
+    await db.query(`
+      ALTER TABLE company_products 
+      ADD COLUMN offer_box_style VARCHAR(50) NULL DEFAULT 'model_1' AFTER benefits_icon;
+    `);
+  } catch {
+    // Coluna já existente
+  }
+
+  // Garante as colunas cta_icon e cta_animation se a tabela já existia antes
+  try {
+    await db.query(`
+      ALTER TABLE company_products 
+      ADD COLUMN cta_icon VARCHAR(50) NULL DEFAULT 'arrow-right' AFTER cta_text,
+      ADD COLUMN cta_animation VARCHAR(50) NULL DEFAULT 'none' AFTER cta_icon;
+    `);
+  } catch {
+    // Coluna já existente
+  }
+
+  // Garante a coluna layout_template se a tabela já existia antes
+  try {
+    await db.query(`
+      ALTER TABLE company_products 
+      ADD COLUMN layout_template VARCHAR(50) NULL DEFAULT 'default' AFTER cover_image;
+    `);
+  } catch {
+    // Coluna já existente
+  }
+
+  // Garante a coluna layout_font se a tabela já existia antes
+  try {
+    await db.query(`
+      ALTER TABLE company_products 
+      ADD COLUMN layout_font VARCHAR(50) NULL DEFAULT 'sans_modern' AFTER layout_theme;
+    `);
+  } catch {
+    // Coluna já existente
+  }
+
   // Insere o super admin padrão inicial se não existir
   await db.query(`
     INSERT IGNORE INTO users (name, email, password, role, status)

@@ -3,6 +3,7 @@ import { getDbPool, initAuthDatabase } from "@/lib/db";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
 import { requireSaPermission } from "@/lib/server-permissions";
 import { deleteEvolutionInstance } from "@/lib/evolution";
+import { logAudit, getClientIpAndAgent } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -109,12 +110,18 @@ export async function PUT(
       );
     }
 
+    const [existingDoc] = await pool.query<RowDataPacket[]>(
+      "SELECT * FROM companies WHERE id = ?",
+      [id]
+    );
+    const oldCompany = existingDoc[0] || null;
+
     if (document && document.trim().length > 0) {
-      const [existingDoc] = await pool.query<RowDataPacket[]>(
+      const [duplicateDoc] = await pool.query<RowDataPacket[]>(
         "SELECT id FROM companies WHERE document = ? AND id != ?",
         [document.trim(), id]
       );
-      if (existingDoc.length > 0) {
+      if (duplicateDoc.length > 0) {
         return NextResponse.json(
           { success: false, error: "Já existe outra empresa com este Documento (CNPJ/CPF)." },
           { status: 409 }
@@ -239,6 +246,29 @@ export async function PUT(
       console.warn("Aviso ao sincronizar usuário admin da empresa:", syncErr);
     }
 
+    // Buscar estado atualizado da empresa após a persistência
+    const [updatedRows] = await pool.query<RowDataPacket[]>(
+      "SELECT * FROM companies WHERE id = ?",
+      [id]
+    );
+    const updatedCompany = updatedRows[0] || null;
+
+    const { ip, userAgent } = getClientIpAndAgent(request);
+    await logAudit({
+      userId: auth.user.id,
+      userName: auth.user.name,
+      userEmail: auth.user.email,
+      userRole: auth.user.role,
+      action: "COMPANY_UPDATE",
+      entityType: "companies",
+      entityId: id,
+      oldValues: oldCompany,
+      newValues: updatedCompany,
+      ipAddress: ip,
+      userAgent,
+      status: "success",
+    });
+
     return NextResponse.json({
       success: true,
       message: "Empresa atualizada com sucesso.",
@@ -297,6 +327,20 @@ export async function DELETE(
         { status: 404 }
       );
     }
+
+    const { ip, userAgent } = getClientIpAndAgent(request);
+    await logAudit({
+      userId: auth.user.id,
+      userName: auth.user.name,
+      userEmail: auth.user.email,
+      userRole: auth.user.role,
+      action: "COMPANY_DELETE",
+      entityType: "companies",
+      entityId: id,
+      ipAddress: ip,
+      userAgent,
+      status: "success",
+    });
 
     return NextResponse.json({
       success: true,

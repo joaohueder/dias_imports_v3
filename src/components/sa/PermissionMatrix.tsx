@@ -23,7 +23,7 @@ import {
   Database,
   Server,
   Cpu,
-  Key,
+  ListTodo,
   FileText,
   Settings,
   LucideIcon,
@@ -53,9 +53,10 @@ const MODULE_ICONS: Record<string, LucideIcon> = {
   migrations: Database,
   instances: Server,
   workers: Cpu,
-  api_keys: Key,
+  jobs: ListTodo,
   logs: FileText,
   settings: Settings,
+  default_instance: Server,
 };
 
 const ACTION_CONFIG: Record<
@@ -95,6 +96,13 @@ const ACTION_CONFIG: Record<
     activeBorder: "border-rose-500/50",
     activeText: "text-rose-300",
     activeBadge: "bg-rose-500/20 text-rose-300",
+  },
+  impersonate: {
+    icon: Sparkles,
+    activeBg: "bg-purple-500/15",
+    activeBorder: "border-purple-500/50",
+    activeText: "text-purple-300",
+    activeBadge: "bg-purple-500/20 text-purple-300",
   },
 };
 

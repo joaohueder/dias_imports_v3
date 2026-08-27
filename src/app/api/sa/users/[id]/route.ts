@@ -3,6 +3,7 @@ import { getDbPool, initAuthDatabase } from "@/lib/db";
 import { getCurrentSaUser } from "@/lib/session";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
 import { requireSaPermission } from "@/lib/server-permissions";
+import { hashPassword } from "@/lib/passwords";
 
 export const dynamic = "force-dynamic";
 
@@ -144,7 +145,8 @@ export async function PUT(request: Request, { params }: RouteParams) {
 
     if (password && password.trim() !== "") {
       query += `, password = ?`;
-      values.push(password.trim());
+      const hashed = await hashPassword(password.trim());
+      values.push(hashed);
     }
 
     query += ` WHERE id = ?`;

@@ -203,7 +203,10 @@ export async function sendEvolutionText(instanceName: string, number: string, te
   const { url, apiKey } = getEvolutionConfig();
 
   // Limpa caracteres do número deixando apenas dígitos
-  const cleanNumber = number.replace(/\D/g, "");
+  let cleanNumber = number.replace(/\D/g, "");
+  if ((cleanNumber.length === 10 || cleanNumber.length === 11) && !cleanNumber.startsWith("55")) {
+    cleanNumber = "55" + cleanNumber;
+  }
 
   try {
     const res = await fetch(`${url}/message/sendText/${instanceName}`, {

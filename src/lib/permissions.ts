@@ -1,8 +1,12 @@
+export type SaasModuleId = keyof SystemUserPermissions;
+export type SaasAction = "view" | "create" | "edit" | "delete" | "impersonate";
+
 export interface ModuleActionPermission {
   view: boolean;
   create: boolean;
   edit: boolean;
   delete: boolean;
+  impersonate?: boolean;
 }
 
 export interface SystemUserPermissions {
@@ -16,9 +20,9 @@ export interface SystemUserPermissions {
   instances?: ModuleActionPermission;
   workers?: ModuleActionPermission;
   jobs?: ModuleActionPermission;
-  api_keys?: ModuleActionPermission;
-  logs?: { view: boolean };
+  logs?: { view: boolean; delete?: boolean };
   settings?: { view: boolean; edit: boolean };
+  default_instance?: ModuleActionPermission;
 }
 
 export const SAAS_MODULES_DEFINITION = [
@@ -41,7 +45,7 @@ export const SAAS_MODULES_DEFINITION = [
     name: "Empresas (Tenants)",
     description: "Gestão completa de empresas clientes do sistema",
     category: "Governança e Empresas",
-    actions: ["view", "create", "edit", "delete"],
+    actions: ["view", "create", "edit", "delete", "impersonate"],
   },
   {
     id: "plans",
@@ -69,7 +73,7 @@ export const SAAS_MODULES_DEFINITION = [
     name: "Migrations & DB",
     description: "Execução e governança de scripts SQL estruturais",
     category: "Infra e Banco de Dados",
-    actions: ["view", "create", "edit", "delete"],
+    actions: ["view", "create"],
   },
   {
     id: "instances",
@@ -83,28 +87,21 @@ export const SAAS_MODULES_DEFINITION = [
     name: "Workers",
     description: "Threads de execução, processos em background e concorrência",
     category: "Infra e Banco de Dados",
-    actions: ["view", "create", "edit", "delete"],
+    actions: ["view", "edit"],
   },
   {
     id: "jobs",
     name: "Central de Tarefas",
     description: "Filas BullMQ, Redis, rotinas e tarefas assíncronas",
     category: "Infra e Banco de Dados",
-    actions: ["view", "create", "edit", "delete"],
-  },
-  {
-    id: "api_keys",
-    name: "Chaves de API & Webhooks",
-    description: "Segurança de integração e endpoints externos",
-    category: "Infra e Banco de Dados",
-    actions: ["view", "create", "edit", "delete"],
+    actions: ["view", "create"],
   },
   {
     id: "logs",
     name: "Logs de Auditoria",
     description: "Rastreabilidade de ações e segurança",
     category: "Infra e Banco de Dados",
-    actions: ["view"],
+    actions: ["view", "delete"],
   },
   {
     id: "settings",
@@ -113,6 +110,13 @@ export const SAAS_MODULES_DEFINITION = [
     category: "Configurações",
     actions: ["view", "edit"],
   },
+  {
+    id: "default_instance",
+    name: "Instância Padrão",
+    description: "Conexão WhatsApp matriz, QR Code e disparos do sistema",
+    category: "Configurações",
+    actions: ["view", "create", "edit", "delete"],
+  },
 ] as const;
 
 export const ACTION_LABELS: Record<string, string> = {
@@ -120,6 +124,7 @@ export const ACTION_LABELS: Record<string, string> = {
   create: "Criar",
   edit: "Editar",
   delete: "Excluir / Inativar",
+  impersonate: "Impersonalizar",
 };
 
 /**
@@ -130,8 +135,9 @@ export function hasUserPermission(
   role: string | undefined | null,
   permissions: Record<string, any> | null | undefined,
   moduleId: string,
-  action: "view" | "create" | "edit" | "delete" = "view"
+  action: "view" | "create" | "edit" | "delete" | "impersonate" = "view"
 ): boolean {
+  if (moduleId === "inicio") return true;
   if (role === "SUPER_ADMIN") return true;
   if (!permissions) return false;
   return Boolean(permissions[moduleId]?.[action]);
@@ -141,6 +147,7 @@ export function hasUserPermission(
  * Mapeia o path da rota frontend /sa/* para o identificador de módulo correspondente
  */
 export function getModuleFromPath(pathname: string): string | null {
+  if (pathname === "/sa/inicio") return "inicio";
   if (pathname === "/sa") return "dashboard";
   if (pathname.startsWith("/sa/health")) return "health";
   if (pathname.startsWith("/sa/companies")) return "companies";
@@ -151,8 +158,8 @@ export function getModuleFromPath(pathname: string): string | null {
   if (pathname.startsWith("/sa/instances")) return "instances";
   if (pathname.startsWith("/sa/workers")) return "workers";
   if (pathname.startsWith("/sa/jobs")) return "jobs";
-  if (pathname.startsWith("/sa/api-keys")) return "api_keys";
   if (pathname.startsWith("/sa/logs")) return "logs";
+  if (pathname.startsWith("/sa/default-instance")) return "default_instance";
   if (pathname.startsWith("/sa/settings")) return "settings";
   return null;
 }

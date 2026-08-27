@@ -21,10 +21,10 @@ export async function GET(
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT 
         i.*,
-        c.name as company_name,
-        c.trade_name as company_trade_name
+        COALESCE(c.name, 'Sistema / Matriz SaaS') as company_name,
+        COALESCE(c.trade_name, 'SaaS Padrão') as company_trade_name
        FROM instances i
-       INNER JOIN companies c ON i.company_id = c.id
+       LEFT JOIN companies c ON i.company_id = c.id
        WHERE i.id = ? LIMIT 1`,
       [Number(id)]
     );

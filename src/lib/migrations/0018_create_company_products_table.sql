@@ -1,0 +1,28 @@
+-- Migration: Criação da tabela de produtos do catálogo da empresa
+CREATE TABLE IF NOT EXISTS company_products (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  company_id INT NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  slug VARCHAR(255) NOT NULL,
+  description TEXT NULL,
+  price DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  promo_price DECIMAL(10, 2) NULL,
+  status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+  images JSON NULL,
+  cover_image TEXT NULL,
+  whatsapp_destination VARCHAR(50) NULL DEFAULT 'default',
+  meta_ads_active BOOLEAN NOT NULL DEFAULT FALSE,
+  layout_color VARCHAR(50) NULL DEFAULT '#6366f1',
+  layout_theme VARCHAR(50) NULL DEFAULT 'dark',
+  cta_text VARCHAR(100) NULL DEFAULT 'Comprar no WhatsApp',
+  headline VARCHAR(255) NULL,
+  guarantee_text VARCHAR(255) NULL,
+  benefits JSON NULL,
+  external_link TEXT NULL,
+  views_count INT NOT NULL DEFAULT 0,
+  clicks_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_company_products_company (company_id),
+  INDEX idx_company_products_slug (company_id, slug)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

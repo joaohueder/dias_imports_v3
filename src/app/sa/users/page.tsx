@@ -10,6 +10,7 @@ import {
   UserX,
   Plus,
   Search,
+  Filter,
   RefreshCw,
   Mail,
   Phone,
@@ -26,6 +27,8 @@ import {
 import { toast } from "sonner";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 import { SAAS_MODULES_DEFINITION, ACTION_LABELS } from "@/lib/permissions";
+import { useSaAuth } from "@/context/SaAuthContext";
+import { Pagination } from "@/components/ui/Pagination";
 
 interface UserItem {
   id: number;
@@ -51,11 +54,14 @@ function getUserInitials(name: string): string {
 
 export default function SaUsersPage() {
   const { showError, showSuccess } = useFeedbackModal();
+  const { can } = useSaAuth();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("active");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   const [currentLoggedUser, setCurrentLoggedUser] = useState<{ id: number; email: string } | null>(null);
 
@@ -99,6 +105,7 @@ export default function SaUsersPage() {
   }, [roleFilter, statusFilter, search, showError]);
 
   useEffect(() => {
+    setCurrentPage(1);
     fetchUsers();
   }, [fetchUsers]);
 
@@ -160,10 +167,15 @@ export default function SaUsersPage() {
     return count;
   };
 
+  const paginatedUsers = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return users.slice(startIndex, startIndex + pageSize);
+  }, [users, currentPage, pageSize]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      <div className="flex flex-col gap-4 pb-4 border-b border-slate-800/80">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
@@ -180,7 +192,7 @@ export default function SaUsersPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-end gap-3 w-full pt-1">
           <button
             onClick={() => fetchUsers()}
             disabled={loading}
@@ -190,97 +202,59 @@ export default function SaUsersPage() {
             <span className="whitespace-nowrap">Atualizar</span>
           </button>
 
-          <Link
-            href="/sa/users/new"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/25 transition-all hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            <Plus className="w-4 h-4 shrink-0" />
-            <span className="whitespace-nowrap">Novo Usuário</span>
-          </Link>
+          {can("users", "create") && (
+            <Link
+              href="/sa/users/new"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/25 transition-all hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Plus className="w-4 h-4 shrink-0" />
+              <span className="whitespace-nowrap">Novo Usuário</span>
+            </Link>
+          )}
         </div>
       </div>
 
       {/* Filters Bar */}
-      <div className="p-3.5 sm:p-4 rounded-2xl bg-[#090f1d]/90 border border-slate-800/80 shadow-xl shadow-black/20 flex flex-col lg:flex-row gap-3 sm:gap-4 items-stretch lg:items-center justify-between">
+      <div className="rounded-2xl bg-[#090f1d]/90 border border-slate-800/80 p-4 flex flex-col sm:flex-row gap-3 items-center justify-between">
         {/* Search Input */}
-        <div className="relative flex-1 min-w-[260px]">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             type="text"
             placeholder="Buscar por nome, e-mail ou whatsapp..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-950/70 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/80 focus:ring-1 focus:ring-indigo-500/30 transition-all"
+            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-slate-900/90 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50"
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {/* Role Filter */}
-          <div className="inline-flex items-center p-1 rounded-xl bg-slate-950/70 border border-slate-800/90 text-xs">
-            <button
-              onClick={() => setRoleFilter("all")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                roleFilter === "all"
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
-              }`}
+          <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl w-full sm:w-auto">
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer w-full"
             >
-              Todos Papéis
-            </button>
-            <button
-              onClick={() => setRoleFilter("SUPER_ADMIN")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                roleFilter === "SUPER_ADMIN"
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
-              }`}
-            >
-              Super Admin
-            </button>
-            <button
-              onClick={() => setRoleFilter("ADMIN")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                roleFilter === "ADMIN"
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
-              }`}
-            >
-              Admin
-            </button>
+              <option value="all" className="bg-slate-900 text-slate-200">Todos Papéis</option>
+              <option value="SUPER_ADMIN" className="bg-slate-900 text-slate-200">Super Admin</option>
+              <option value="ADMIN" className="bg-slate-900 text-slate-200">Admin</option>
+            </select>
           </div>
 
           {/* Status Filter */}
-          <div className="inline-flex items-center p-1 rounded-xl bg-slate-950/70 border border-slate-800/90 text-xs">
-            <button
-              onClick={() => setStatusFilter("active")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                statusFilter === "active"
-                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
-              }`}
+          <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl w-full sm:w-auto">
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer w-full"
             >
-              Ativos
-            </button>
-            <button
-              onClick={() => setStatusFilter("inactive")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                statusFilter === "inactive"
-                  ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
-              }`}
-            >
-              Inativos
-            </button>
-            <button
-              onClick={() => setStatusFilter("all")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                statusFilter === "all"
-                  ? "bg-slate-800 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
-              }`}
-            >
-              Todos
-            </button>
+              <option value="active" className="bg-slate-900 text-slate-200">Ativos</option>
+              <option value="inactive" className="bg-slate-900 text-slate-200">Inativos</option>
+              <option value="all" className="bg-slate-900 text-slate-200">Todos os Status</option>
+            </select>
           </div>
         </div>
       </div>
@@ -300,8 +274,9 @@ export default function SaUsersPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {users.map((user) => {
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {paginatedUsers.map((user) => {
             const isSuperAdmin = user.role === "SUPER_ADMIN";
             const allowedCount = countPerms(user.permissions);
             const isSelf =
@@ -410,55 +385,71 @@ export default function SaUsersPage() {
                 </div>
 
                 {/* Actions Footer */}
-                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1">
-                    {!isSelf && (
-                      <>
-                        <button
-                          onClick={() => {
-                            setSelectedUser(user);
-                            setIsStatusModalOpen(true);
-                          }}
-                          title={user.status === "active" ? "Inativar Usuário" : "Ativar Usuário"}
-                          className={`p-2 rounded-lg text-xs transition-colors ${
-                            user.status === "active"
-                              ? "bg-slate-800 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-slate-700/60"
-                              : "bg-slate-800 hover:bg-emerald-950/40 text-slate-400 hover:text-emerald-400 border border-slate-700/60"
-                          }`}
-                        >
-                          <Power className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedUser(user);
-                            setIsDeleteModalOpen(true);
-                          }}
-                          title="Excluir Usuário"
-                          className="p-2 rounded-lg text-xs bg-slate-800 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 transition-colors border border-slate-700/60"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </>
-                    )}
-                    {isSelf && (
-                      <span className="text-[11px] text-slate-500 italic px-1">
-                        Conta conectada
-                      </span>
-                    )}
+                <div className="pt-3 border-t border-slate-800/80 flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1">
+                      {!isSelf && (
+                        <>
+                          {can("users", "delete") && (
+                            <button
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setIsStatusModalOpen(true);
+                              }}
+                              title={user.status === "active" ? "Inativar Usuário" : "Ativar Usuário"}
+                              className={`p-2 rounded-lg text-xs transition-colors ${
+                                user.status === "active"
+                                  ? "bg-slate-800 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-slate-700/60"
+                                  : "bg-slate-800 hover:bg-emerald-950/40 text-slate-400 hover:text-emerald-400 border border-slate-700/60"
+                              }`}
+                            >
+                              <Power className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {can("users", "delete") && (
+                            <button
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setIsDeleteModalOpen(true);
+                              }}
+                              title="Excluir Usuário"
+                              className="p-2 rounded-lg text-xs bg-slate-800 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 transition-colors border border-slate-700/60"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {isSelf && (
+                        <span className="text-[11px] text-slate-500 italic px-1">
+                          Conta conectada
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  <Link
-                    href={isSelf ? "/sa/profile" : `/sa/users/${user.id}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition-all border border-slate-700/60 hover:border-indigo-500"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                    <span>{isSelf ? "Meu Perfil" : "Editar & Permissões"}</span>
-                  </Link>
+                  {can("users", "edit") && (
+                    <Link
+                      href={isSelf ? "/sa/profile" : `/sa/users/${user.id}`}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-600/15 hover:bg-indigo-600/25 text-indigo-300 border border-indigo-500/30 transition-all hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap text-center"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 shrink-0" />
+                      <span className="whitespace-nowrap">{isSelf ? "Meu Perfil" : "Gerenciar & Permissões"}</span>
+                    </Link>
+                  )}
                 </div>
               </div>
             );
           })}
-        </div>
+          </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalItems={users.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+          />
+        </>
       )}
 
       {/* Modal: Visualizar Permissões do Admin */}

@@ -8,4 +8,5 @@
 - A skill `JH7-DESIGNER` é acionada sempre que houver tarefas de UI/UX, design system, componentes visuais e frontend.
 - A skill `JH7-DESENVOLVEDOR` é acionada como especialista principal de desenvolvimento, arquitetura, backend (NestJS), frontend funcional (Next.js), banco (MySQL/Prisma), filas (Redis/BullMQ), infraestrutura (PM2/Nginx) e segurança.
 - A skill `JH7-SECURITY-GUARDIAN` é o especialista sênior em segurança de aplicações, secure coding e DevSecOps, garantindo conformidade com OWASP, ASVS e auditoria de segurança em todas as camadas.
+- A skill `JH7-SEGURANCA` é o especialista avançado em ataque, pentest simulado e simulação de invasão (Red Team), acionada EXCLUSIVAMENTE sob demanda explícita para auditar cenários de ataque e gerar relatórios de segurança com planos de mitigação.
 - A skill `JH7-EVOLUTION-2.3.7` é acionada sempre ao tratar de Evolution API v2.3.7, WhatsApp, instâncias, webhooks, eventos, mensagens e automação de grupos.

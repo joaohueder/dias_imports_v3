@@ -12,9 +12,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireSaPermission("instances", "edit");
-    if (!auth.authorized) return auth.response;
-
     const { id } = await params;
     const pool = getDbPool();
     const body = await request.json();
@@ -35,6 +32,9 @@ export async function PATCH(
     }
 
     const instance = rows[0];
+    const moduleReq = instance.is_default ? "default_instance" : "instances";
+    const auth = await requireSaPermission(moduleReq, "edit");
+    if (!auth.authorized) return auth.response;
     let updatedStatus = instance.status;
     let message = "Ação executada com sucesso.";
 

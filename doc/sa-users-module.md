@@ -12,7 +12,7 @@ O módulo de **Usuários do Sistema** (`/sa/users`) é responsável pelo gerenci
 
 Ele estabelece duas categorias de papéis para os usuários do backoffice:
 1. **Super Admin (`SUPER_ADMIN`)**: Acesso irrestrito e total a todos os módulos, bancos de dados, migrations, instâncias e configurações globais.
-2. **Admin (`ADMIN`)**: Acesso controlado com matriz de permissões granulares por módulo (`dashboard`, `health`, `companies`, `plans`, `subscriptions`, `users`, `migrations`, `instances`, `api_keys`, `logs`, `settings`) e por ação (`view`, `create`, `edit`, `delete`).
+2. **Admin (`ADMIN`)**: Acesso controlado com matriz de permissões granulares por módulo (`dashboard`, `health`, `companies`, `plans`, `subscriptions`, `users`, `migrations`, `instances`, `workers`, `jobs`, `logs`, `settings`, `default_instance`) e por ação (`view`, `create`, `edit`, `delete`).
 
 ---
 
@@ -56,7 +56,7 @@ Por segurança operacional e para evitar auto-bloqueio ou perda irreversível de
 | **Migrations & DB** | `view`, `create`, `edit`, `delete` | Infra & Banco de Dados |
 | **Instâncias & Workers** | `view`, `create`, `edit`, `delete` | Infra & Banco de Dados |
 | **Chaves de API & Webhooks** | `view`, `create`, `edit`, `delete` | Infra & Banco de Dados |
-| **Logs de Auditoria** | `view` | Infra & Banco de Dados |
+| **Logs de Auditoria** | `view`, `delete` | Infra & Banco de Dados |
 | **Parâmetros do SaaS** | `view`, `edit` | Configurações |
 
 ---

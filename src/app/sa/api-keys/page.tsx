@@ -135,7 +135,7 @@ export default function SaApiKeysPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-300">
-            <thead className="bg-slate-950/60 border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-400 font-semibold">
+            <thead className="bg-[#0b1222] border-b border-slate-800/90 text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
               <tr>
                 <th className="px-5 py-3.5">Nome / Tipo</th>
                 <th className="px-5 py-3.5">Chave / Token</th>
@@ -150,38 +150,39 @@ export default function SaApiKeysPage() {
                 const isCopied = copiedId === key.id;
 
                 return (
-                  <tr key={key.id} className="hover:bg-slate-800/30 transition-colors">
+                  <tr key={key.id} className="hover:bg-slate-900/40 transition-colors">
                     <td className="px-5 py-4 whitespace-nowrap">
-                      <div className="font-semibold text-white">{key.name}</div>
+                      <div className="font-bold text-white text-sm">{key.name}</div>
                       <span className="text-[10px] uppercase font-mono text-indigo-400">{key.type}</span>
                     </td>
-                    <td className="px-5 py-4 whitespace-nowrap font-mono text-slate-300">
+                    <td className="px-5 py-4 whitespace-nowrap font-mono text-slate-300 text-[11px]">
                       {isRevealed ? key.fullKey : key.keyPreview}
                     </td>
                     <td className="px-5 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                         Ativa
                       </span>
                     </td>
                     <td className="px-5 py-4 whitespace-nowrap text-slate-400 font-mono text-[11px]">
                       {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleTimeString("pt-BR") : "Nunca"}
                     </td>
-                    <td className="px-5 py-4 whitespace-nowrap text-right space-x-2">
+                    <td className="px-5 py-4 whitespace-nowrap text-right space-x-1.5">
                       <button
                         type="button"
                         onClick={() => toggleReveal(key.id)}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all"
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800/90 hover:bg-indigo-600 text-slate-300 hover:text-white border border-slate-700/60 hover:border-indigo-500 transition-all shadow-sm active:scale-95 cursor-pointer"
                         title={isRevealed ? "Ocultar Chave" : "Mostrar Chave"}
                       >
-                        {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        {isRevealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                       <button
                         type="button"
                         onClick={() => handleCopy(key.id, key.fullKey)}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all"
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800/90 hover:bg-emerald-600 text-slate-300 hover:text-white border border-slate-700/60 hover:border-emerald-500 transition-all shadow-sm active:scale-95 cursor-pointer"
                         title="Copiar Chave"
                       >
-                        {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        {isCopied ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
                       </button>
                     </td>
                   </tr>

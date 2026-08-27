@@ -1,3 +1,5 @@
-export const SYSTEM_VERSION = "2026.08.0183";
-export const SYSTEM_NAME = "JH7 Marketing";
-export const SYSTEM_DESCRIPTION = "Gerenciamento de Marketing em Grupos de WhatsApp";
+﻿// Global system configuration constants and versioning
+
+export const SYSTEM_VERSION = "2026.08.0386";
+
+export const SYSTEM_NAME = "Dias Imports SaaS";

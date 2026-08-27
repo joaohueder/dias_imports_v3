@@ -102,9 +102,7 @@ export function RedisStatusIndicator() {
             className={`w-2 h-2 rounded-full ${
               status === "online"
                 ? "bg-emerald-400 animate-pulse"
-                : status === "offline"
-                ? "bg-rose-400 animate-ping"
-                : "bg-amber-400 animate-pulse"
+                : "bg-rose-400 animate-ping"
             }`}
           />
           <span className="capitalize text-[11px]">

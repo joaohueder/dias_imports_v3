@@ -16,7 +16,11 @@ export function middleware(request: NextRequest) {
   const saUserId = request.cookies.get("sa_user_id")?.value;
   const saUserEmail = request.cookies.get("sa_user_email")?.value;
 
+  const companyAuthToken = request.cookies.get("company_auth_token")?.value;
+  const companyUserId = request.cookies.get("company_user_id")?.value;
+
   const hasSaSession = Boolean(saAuthToken || saUserId || saUserEmail);
+  const hasCompanySession = Boolean(companyAuthToken || companyUserId || hasSaSession);
 
   // 1. Proteger rotas frontend /sa (exceto login)
   if (isSaRoute && !isSaLogin) {
@@ -32,7 +36,21 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/sa", request.url));
   }
 
-  // 3. Proteger endpoints de API /api/sa (exceto health checks públicos se houver)
+  // 3. Proteger rotas frontend /painel (exceto login)
+  if (isPainelRoute && !isPainelLogin) {
+    if (!hasCompanySession) {
+      const loginUrl = new URL("/painel/login", request.url);
+      loginUrl.searchParams.set("redirect", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
+  // 4. Redirecionar se já logado tentando acessar /painel/login
+  if (isPainelLogin && hasCompanySession) {
+    return NextResponse.redirect(new URL("/painel", request.url));
+  }
+
+  // 5. Proteger endpoints de API /api/sa (exceto health checks públicos se houver)
   if (isSaApi && !hasSaSession) {
     // Permite que a rota retorne 401 via session check no endpoint ou bloqueia antecipadamente
     // Deixamos prosseguir para que getCurrentSaUser() valide o banco ou retorne 401 padronizado
