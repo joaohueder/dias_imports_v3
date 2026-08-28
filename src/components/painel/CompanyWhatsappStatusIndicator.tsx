@@ -28,6 +28,10 @@ export function CompanyWhatsappStatusIndicator() {
       const response = await fetch("/api/painel/instances/status", {
         cache: "no-store",
       });
+      if (response.status === 401) {
+        setStatus("no_instance");
+        return;
+      }
       const data = await response.json();
       if (response.ok && data.success) {
         setInstance(data.primaryInstance || data);
@@ -49,7 +53,10 @@ export function CompanyWhatsappStatusIndicator() {
 
   useEffect(() => {
     checkStatus();
-    const interval = setInterval(checkStatus, 10000);
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      checkStatus();
+    }, 25000);
     return () => clearInterval(interval);
   }, [checkStatus]);
 

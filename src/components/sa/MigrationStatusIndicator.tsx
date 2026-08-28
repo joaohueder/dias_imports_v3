@@ -30,8 +30,11 @@ export function MigrationStatusIndicator() {
   useEffect(() => {
     if (!isSaPanel) return;
     checkPendingMigrations();
-    // Verifica a cada 10 segundos
-    const interval = setInterval(checkPendingMigrations, 10000);
+    // Verifica a cada 30 segundos
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      checkPendingMigrations();
+    }, 30000);
     return () => clearInterval(interval);
   }, [isSaPanel, checkPendingMigrations]);
 

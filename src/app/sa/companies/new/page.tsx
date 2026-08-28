@@ -109,10 +109,10 @@ interface Instance {
 
 // Mapeamento visual e amigável em português dos status de assinatura
 const SUBSCRIPTION_STATUS_MAP: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  active: { label: "Ativo", bg: "bg-emerald-500/10", text: "text-emerald-400", border: "border-emerald-500/20" },
-  past_due: { label: "Atrasado", bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/20" },
-  canceled: { label: "Cancelado", bg: "bg-slate-800", text: "text-slate-400", border: "border-slate-700" },
-  expired: { label: "Expirado", bg: "bg-rose-500/10", text: "text-rose-400", border: "border-rose-500/20" },
+  active: { label: "Ativa", bg: "bg-emerald-500/10", text: "text-emerald-400", border: "border-emerald-500/20" },
+  past_due: { label: "Aguardando Pagamento", bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/20" },
+  canceled: { label: "Cancelada", bg: "bg-slate-800", text: "text-slate-400", border: "border-slate-700" },
+  expired: { label: "Expirada", bg: "bg-rose-500/10", text: "text-rose-400", border: "border-rose-500/20" },
 };
 
 function CompanyFormContent({ companyIdProp }: { companyIdProp?: string }) {
@@ -2591,6 +2591,12 @@ function CompanyFormContent({ companyIdProp }: { companyIdProp?: string }) {
               <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                 {availablePlans.map((plan) => {
                   const isSelected = selectedPlanId === String(plan.id);
+                  const cycleLabels: Record<string, string> = {
+                    monthly: "mês",
+                    quarterly: "trimestre",
+                    semiannual: "semestre",
+                    yearly: "ano",
+                  };
                   return (
                     <div
                       key={plan.id}
@@ -2615,7 +2621,9 @@ function CompanyFormContent({ companyIdProp }: { companyIdProp?: string }) {
                         <span className="text-sm font-black text-white">
                           R$ {Number(plan.price).toFixed(2).replace(".", ",")}
                         </span>
-                        <span className="text-[10px] text-slate-500 block">/ mês</span>
+                        <span className="text-[10px] text-slate-500 block">
+                          / {cycleLabels[plan.billing_cycle] || "mês"}
+                        </span>
                       </div>
                     </div>
                   );

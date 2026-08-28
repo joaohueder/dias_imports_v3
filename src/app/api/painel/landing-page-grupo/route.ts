@@ -6,8 +6,8 @@ import { RowDataPacket, ResultSetHeader } from "mysql2";
 export async function GET(req: NextRequest) {
   try {
     await initAuthDatabase();
-    const companyUser = await getCurrentCompanyUser(req);
-    const saUser = await getCurrentSaUser(req);
+    const companyUser = await getCurrentCompanyUser();
+    const saUser = await getCurrentSaUser();
 
     const companyId = companyUser?.company_id || saUser?.company_id;
     if (!companyId) {
@@ -93,6 +93,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      company_id: companyId,
       landing_page: landingPage,
       groups: groupsRows
     });
@@ -105,8 +106,8 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     await initAuthDatabase();
-    const companyUser = await getCurrentCompanyUser(req);
-    const saUser = await getCurrentSaUser(req);
+    const companyUser = await getCurrentCompanyUser();
+    const saUser = await getCurrentSaUser();
 
     const companyId = companyUser?.company_id || saUser?.company_id;
     if (!companyId) {

@@ -54,18 +54,18 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Buscar da API
-      const res = await fetch("/api/sa/settings");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.settings?.layout) {
-          const apiLayout: LayoutSettings = {
-            preset: data.settings.layout.preset || "1200px",
-            customWidth: Math.max(1200, Number(data.settings.layout.customWidth) || 1200),
-          };
-          setSavedSettings(apiLayout);
-          setPreviewSettingsState(apiLayout);
-          if (typeof window !== "undefined") {
+      // Buscar da API somente se estiver em ambiente Super Admin (/sa)
+      if (typeof window !== "undefined" && window.location.pathname.startsWith("/sa")) {
+        const res = await fetch("/api/sa/settings");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.settings?.layout) {
+            const apiLayout: LayoutSettings = {
+              preset: data.settings.layout.preset || "1200px",
+              customWidth: Math.max(1200, Number(data.settings.layout.customWidth) || 1200),
+            };
+            setSavedSettings(apiLayout);
+            setPreviewSettingsState(apiLayout);
             localStorage.setItem("jh7_saas_layout_settings", JSON.stringify(apiLayout));
           }
         }

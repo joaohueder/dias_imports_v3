@@ -42,6 +42,7 @@ interface Plan {
   max_leads?: number;
   max_instances: number;
   is_featured: boolean | number;
+  is_public?: boolean | number;
   sort_order?: number;
   subscriptions_count?: number;
   active_subscriptions_count?: number;
@@ -54,7 +55,8 @@ export default function PlansPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("active");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [visibilityFilter, setVisibilityFilter] = useState("all");
 
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [togglingPlanId, setTogglingPlanId] = useState<number | null>(null);
@@ -66,11 +68,13 @@ export default function PlansPage() {
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [planToChangeStatus, setPlanToChangeStatus] = useState<Plan | null>(null);
 
-  const hasActiveFilters = searchTerm.trim().length > 0 || statusFilter !== "active";
+  const hasActiveFilters =
+    searchTerm.trim().length > 0 || statusFilter !== "all" || visibilityFilter !== "all";
 
   const handleClearFilters = () => {
     setSearchTerm("");
-    setStatusFilter("active");
+    setStatusFilter("all");
+    setVisibilityFilter("all");
   };
 
   const fetchPlans = useCallback(async () => {
@@ -79,6 +83,7 @@ export default function PlansPage() {
       const params = new URLSearchParams();
       if (searchTerm) params.append("search", searchTerm);
       if (statusFilter !== "all") params.append("status", statusFilter);
+      if (visibilityFilter !== "all") params.append("visibility", visibilityFilter);
 
       const res = await fetch(`/api/sa/plans?${params.toString()}`);
       const data = await res.json();
@@ -93,7 +98,7 @@ export default function PlansPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, statusFilter, showError]);
+  }, [searchTerm, statusFilter, visibilityFilter, showError]);
 
   useEffect(() => {
     fetchPlans();
@@ -246,8 +251,23 @@ export default function PlansPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl w-full sm:w-auto">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
+          {/* Filtro por Visibilidade */}
+          <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl flex-1 sm:flex-initial">
+            <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={visibilityFilter}
+              onChange={(e) => setVisibilityFilter(e.target.value)}
+              className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer w-full"
+            >
+              <option value="all" className="bg-slate-900 text-slate-200">Todas Visibilidades</option>
+              <option value="public" className="bg-slate-900 text-slate-200">Somente Públicos</option>
+              <option value="private" className="bg-slate-900 text-slate-200">Somente Privados</option>
+            </select>
+          </div>
+
+          {/* Filtro por Status */}
+          <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl flex-1 sm:flex-initial">
             <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <select
               value={statusFilter}
@@ -323,41 +343,43 @@ export default function PlansPage() {
           )}
         </div>
       ) : (
-        <Reorder.Group
-          axis="x"
-          values={plans}
-          onReorder={handleReorder}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 list-none p-0 m-0"
-        >
-          {plans.map((plan) => {
-            const isPlanFeatured = Boolean(plan.is_featured);
-            const isDragEnabled = !searchTerm && statusFilter === "all";
-            const isInactive = plan.status === "inactive";
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Reorder.Group
+            axis="x"
+            values={plans}
+            onReorder={handleReorder}
+            className="contents"
+          >
+            {plans.map((plan) => {
+              const isPlanFeatured = Boolean(plan.is_featured);
+              const isDragEnabled = !searchTerm && statusFilter === "all";
+              const isInactive = plan.status === "inactive";
 
-            return (
-              <Reorder.Item
-                key={plan.id}
-                value={plan}
-                dragListener={isDragEnabled}
-                whileDrag={{
-                  scale: 1.04,
-                  rotate: 1.5,
-                  zIndex: 50,
-                  boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 25px rgba(99, 102, 241, 0.4)",
-                }}
-                transition={{
-                  type: "spring",
-                  stiffness: 350,
-                  damping: 25,
-                }}
-                className={`relative flex flex-col justify-between rounded-2xl border transition-all p-6 cursor-default ${
-                  isInactive
-                    ? "bg-slate-900/30 border-slate-800/40 opacity-60 hover:opacity-85"
-                    : isPlanFeatured
-                    ? "bg-slate-900/60 border-indigo-500/50 shadow-xl shadow-indigo-950/40 ring-1 ring-indigo-500/20"
-                    : "bg-slate-900/60 border-slate-800/80 hover:border-slate-700/80"
-                }`}
-              >
+              return (
+                <Reorder.Item
+                  key={plan.id}
+                  value={plan}
+                  dragListener={isDragEnabled}
+                  layout
+                  whileDrag={{
+                    scale: 1.02,
+                    zIndex: 50,
+                    cursor: "grabbing",
+                    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 25px rgba(99, 102, 241, 0.3)",
+                  }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 300,
+                    damping: 25,
+                  }}
+                  className={`relative flex flex-col justify-between rounded-2xl border p-6 select-none ${
+                    isInactive
+                      ? "bg-slate-900/30 border-slate-800/40 opacity-60 hover:opacity-85"
+                      : isPlanFeatured
+                      ? "bg-slate-900/60 border-indigo-500/50 shadow-xl shadow-indigo-950/40 ring-1 ring-indigo-500/20"
+                      : "bg-slate-900/60 border-slate-800/80 hover:border-slate-700/80"
+                  } ${isDragEnabled ? "cursor-grab active:cursor-grabbing" : "cursor-default"}`}
+                >
                 {isPlanFeatured && (
                   <div className="absolute -top-3 right-6 px-3 py-0.5 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 shadow-md pointer-events-none">
                     <Sparkles className="w-3 h-3" />
@@ -377,7 +399,7 @@ export default function PlansPage() {
                         </div>
                       )}
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <h3 className="text-lg font-bold text-white">{plan.name}</h3>
                           <span
                             className={`px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider ${
@@ -387,6 +409,20 @@ export default function PlansPage() {
                             }`}
                           >
                             {plan.status === "active" ? "Ativo" : "Inativo"}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider ${
+                              plan.is_public === 0 || plan.is_public === false
+                                ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                                : "bg-sky-500/10 text-sky-400 border-sky-500/20"
+                            }`}
+                            title={
+                              plan.is_public === 0 || plan.is_public === false
+                                ? "Plano Privado: Visível apenas para o Super Admin"
+                                : "Plano Público: Visível para os lojistas no painel"
+                            }
+                          >
+                            {plan.is_public === 0 || plan.is_public === false ? "Privado" : "Público"}
                           </span>
                         </div>
                         {plan.description && (
@@ -530,7 +566,8 @@ export default function PlansPage() {
               </Reorder.Item>
             );
           })}
-        </Reorder.Group>
+          </Reorder.Group>
+        </div>
       )}
 
       {/* Modal de Confirmação de Mudança de Status */}

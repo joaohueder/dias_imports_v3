@@ -11,7 +11,6 @@ import {
   Activity,
   Play,
 } from "lucide-react";
-import { PainelLayoutClient } from "@/components/painel/PainelLayoutClient";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 import { FloatingActionBar } from "@/components/ui/FloatingActionBar";
 
@@ -152,8 +151,7 @@ export default function PainelConfiguracoesMetaAdsPage() {
   }
 
   return (
-    <PainelLayoutClient>
-      <div className="space-y-6 pb-28 animate-in fade-in duration-300">
+    <div className="space-y-6 pb-28 animate-in fade-in duration-300">
         {/* CABEÇALHO */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
           <div className="flex items-center gap-3">
@@ -358,6 +356,5 @@ export default function PainelConfiguracoesMetaAdsPage() {
           savingLabel="Salvando Alterações..."
         />
       </div>
-    </PainelLayoutClient>
   );
 }

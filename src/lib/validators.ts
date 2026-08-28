@@ -45,6 +45,7 @@ export function maskZipcode(value: string): string {
 
 export const maskCep = maskZipcode;
 export const maskCnpjCpf = maskCpfCnpj;
+export const maskDocument = maskCpfCnpj;
 
 export function unmask(value: string | null | undefined): string {
   if (!value) return "";

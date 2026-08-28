@@ -26,13 +26,13 @@ export async function GET() {
     }
     const pool = getDbPool();
 
-    // 1. Planos ativos no catálogo
+    // 1. Planos ativos e públicos no catálogo
     const [plans] = await pool.query<RowDataPacket[]>(
       `SELECT id, name, description, price, billing_cycle, status, 
               max_groups, max_products, max_messages_day, max_views, max_leads, max_instances, 
-              is_featured, features
+              is_featured, is_public, features
        FROM plans
-       WHERE status = 'active'
+       WHERE status = 'active' AND (is_public = 1 OR is_public IS NULL)
        ORDER BY sort_order ASC, price ASC, id ASC`
     );
 

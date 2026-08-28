@@ -22,7 +22,6 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { PainelLayoutClient } from "@/components/painel/PainelLayoutClient";
 
 interface Lead {
   id: number;
@@ -183,8 +182,7 @@ export default function GestaoLeadsPage() {
   const isQuotaExceeded = stats.max_leads > 0 && stats.total_leads >= stats.max_leads;
 
   return (
-    <PainelLayoutClient>
-      <div className="w-full space-y-6 pb-12">
+    <div className="w-full space-y-6 pb-12">
         {/* BANNER DE UPGRADE SE O LIMITE DE LEADS FOI ATINGIDO/VENCIDO */}
         {isQuotaExceeded && (
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-950/90 via-rose-950/90 to-purple-950/90 border-2 border-amber-500/80 shadow-[0_0_30px_rgba(245,158,11,0.3)] animate-pulse p-4 sm:p-5">
@@ -343,129 +341,235 @@ export default function GestaoLeadsPage() {
           </div>
 
           {/* COLUNA 2, 3 E 4 (Linhas 1 e 2): EVOLUÇÃO DOS LEADS (Views em Linha / Leads em Colunas) */}
-          <div className="lg:col-span-3 bg-[#0c1222]/90 border border-slate-800/80 rounded-2xl p-4 sm:p-5 flex flex-col justify-between relative overflow-hidden">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/60">
+          <div className="lg:col-span-3 bg-gradient-to-b from-[#0e1628] to-[#080d19] border border-slate-800/80 rounded-2xl p-4 sm:p-5 flex flex-col justify-between relative overflow-hidden shadow-xl">
+            {/* Background Glow suave */}
+            <div className="absolute -top-20 -right-20 w-56 h-56 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-slate-800/60 relative z-10">
               <div>
                 <div className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-emerald-400" />
-                  <span className="text-xs sm:text-sm font-bold text-white">Evolução dos Leads & Tráfego</span>
+                  <div className="w-6 h-6 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <TrendingUp className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs sm:text-sm font-black tracking-tight text-white">Evolução dos Leads & Tráfego</span>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+                <p className="text-[11px] text-slate-400 mt-0.5 font-normal">
                   Visualizações da Landing Page (Linha) vs Leads Convertidos (Colunas) nos últimos 7 dias
                 </p>
               </div>
 
-              {/* Legenda do Gráfico */}
-              <div className="flex items-center gap-4 text-xs font-semibold">
+              {/* Legenda do Gráfico Moderna */}
+              <div className="flex items-center gap-3 bg-slate-950/60 border border-slate-800/80 px-3 py-1.5 rounded-xl text-xs font-semibold">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded bg-indigo-500 shadow-sm shadow-indigo-500/50" />
-                  <span className="text-slate-300 text-[11px]">Leads (Colunas)</span>
+                  <span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-t from-indigo-600 to-indigo-400 shadow-sm shadow-indigo-500/50" />
+                  <span className="text-slate-300 text-[11px]">Leads</span>
                 </div>
+                <span className="text-slate-700">|</span>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-1 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
-                  <span className="text-slate-300 text-[11px]">Views (Linha)</span>
+                  <span className="w-3.5 h-0.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
+                  <span className="text-slate-300 text-[11px]">Views</span>
                 </div>
               </div>
             </div>
 
-            {/* Gráfico Visual Composto SVG / Barras Responsivas */}
-            <div className="pt-4 pb-2">
+            {/* Gráfico Visual Composto SVG Unificado (Linha e Barras na Mesma Escala X e Y) */}
+            <div className="pt-4 pb-1 relative z-10">
               {(() => {
                 const maxVal = Math.max(
-                  1,
+                  5,
                   ...chartData.map((d) => Math.max(d.leads, d.views))
                 );
 
                 const chartWidth = 700;
-                const chartHeight = 130;
-                const stepX = chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth;
+                const chartHeight = 160;
+                const topPadding = 24;
+                const bottomPadding = 16;
+                const usableHeight = chartHeight - topPadding - bottomPadding;
+                const numCols = chartData.length;
+                const colWidth = chartWidth / (numCols || 1);
+                const barWidth = Math.min(36, colWidth * 0.45);
 
-                // Pontos para a linha de Views (Linha SVG)
-                const linePoints = chartData
-                  .map((d, idx) => {
-                    const x = idx * stepX;
-                    const y = chartHeight - (d.views / maxVal) * (chartHeight - 20) - 10;
-                    return `${x},${y}`;
-                  })
-                  .join(" ");
+                // Coordenadas calculadas no mesmo sistema para colunas e pontos
+                const points = chartData.map((d, idx) => {
+                  const centerX = idx * colWidth + colWidth / 2;
+                  const viewsY = topPadding + (1 - d.views / maxVal) * usableHeight;
+                  const leadsHeight = (d.leads / maxVal) * usableHeight;
+                  const leadsY = topPadding + usableHeight - leadsHeight;
+                  return {
+                    centerX,
+                    viewsY,
+                    leadsY,
+                    leadsHeight,
+                    views: d.views,
+                    leads: d.leads,
+                    label: d.label,
+                  };
+                });
+
+                // Path de linha suave (Bézier)
+                const linePathD = points.reduce((acc, pt, i, arr) => {
+                  if (i === 0) return `M ${pt.centerX},${pt.viewsY}`;
+                  const prev = arr[i - 1];
+                  const cx = (prev.centerX + pt.centerX) / 2;
+                  return `${acc} C ${cx},${prev.viewsY} ${cx},${pt.viewsY} ${pt.centerX},${pt.viewsY}`;
+                }, "");
+
+                // Área translúcida sob a curva
+                const baselineY = chartHeight - bottomPadding;
+                const areaPathD = `${linePathD} L ${points[points.length - 1]?.centerX || chartWidth},${baselineY} L ${points[0]?.centerX || 0},${baselineY} Z`;
 
                 return (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {/* Área do Gráfico */}
-                    <div className="relative h-36 w-full flex items-end">
-                      {/* Linhas de Grade de Fundo */}
-                      <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20">
-                        <div className="border-b border-dashed border-slate-700 w-full" />
-                        <div className="border-b border-dashed border-slate-700 w-full" />
-                        <div className="border-b border-dashed border-slate-700 w-full" />
+                    <div className="relative h-44 w-full">
+                      {/* Linhas de Grade de Fundo com Valores de Referência */}
+                      <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-4">
+                        <div className="border-b border-dashed border-slate-800/70 w-full flex items-center justify-end">
+                          <span className="text-[9px] font-mono text-slate-600 px-1">{maxVal}</span>
+                        </div>
+                        <div className="border-b border-dashed border-slate-800/50 w-full flex items-center justify-end">
+                          <span className="text-[9px] font-mono text-slate-600 px-1">{Math.round(maxVal / 2)}</span>
+                        </div>
+                        <div className="border-b border-slate-800/80 w-full flex items-center justify-end">
+                          <span className="text-[9px] font-mono text-slate-600 px-1">0</span>
+                        </div>
                       </div>
 
-                      {/* Linha SVG das Views */}
+                      {/* SVG Composto: Colunas de Leads + Curva Suave de Views na Mesma Escala */}
                       <svg
-                        className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-10"
+                        className="absolute inset-0 w-full h-full overflow-visible z-10"
                         viewBox={`0 0 ${chartWidth} ${chartHeight}`}
                         preserveAspectRatio="none"
                       >
-                        <polyline
-                          fill="none"
-                          stroke="#34d399"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          points={linePoints}
-                          className="drop-shadow-[0_2px_8px_rgba(52,211,153,0.5)]"
-                        />
-                        {chartData.map((d, idx) => {
-                          const cx = idx * stepX;
-                          const cy = chartHeight - (d.views / maxVal) * (chartHeight - 20) - 10;
+                        <defs>
+                          <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#818cf8" />
+                            <stop offset="50%" stopColor="#6366f1" />
+                            <stop offset="100%" stopColor="#4338ca" />
+                          </linearGradient>
+                          <linearGradient id="viewsAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
+                            <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                          </linearGradient>
+                          <filter id="glowViews" x="-20%" y="-20%" width="140%" height="140%">
+                            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#10b981" floodOpacity="0.6" />
+                          </filter>
+                          <filter id="barShadow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#6366f1" floodOpacity="0.4" />
+                          </filter>
+                        </defs>
+
+                        {/* Área sombreada das Views */}
+                        <path d={areaPathD} fill="url(#viewsAreaGrad)" />
+
+                        {/* Barras de Leads (Colunas centralizadas em centerX) */}
+                        {points.map((pt, idx) => {
+                          const rx = 6;
+                          if (pt.leads <= 0) {
+                            return (
+                              <rect
+                                key={`empty-bar-${idx}`}
+                                x={pt.centerX - barWidth / 2}
+                                y={baselineY - 3}
+                                width={barWidth}
+                                height={3}
+                                rx={1.5}
+                                fill="#1e293b"
+                                opacity="0.8"
+                              />
+                            );
+                          }
                           return (
-                            <circle
-                              key={`dot-${idx}`}
-                              cx={cx}
-                              cy={cy}
-                              r="3.5"
-                              fill="#090f1d"
-                              stroke="#34d399"
-                              strokeWidth="2"
-                            />
+                            <g key={`bar-group-${idx}`}>
+                              <rect
+                                x={pt.centerX - barWidth / 2}
+                                y={pt.leadsY}
+                                width={barWidth}
+                                height={pt.leadsHeight}
+                                rx={rx}
+                                fill="url(#barGrad)"
+                                filter="url(#barShadow)"
+                                className="transition-all duration-300 hover:brightness-125"
+                              />
+                              {/* Rótulo numérico dos Leads sobre a barra */}
+                              <text
+                                x={pt.centerX}
+                                y={Math.max(12, pt.leadsY - 6)}
+                                textAnchor="middle"
+                                fill="#ffffff"
+                                fontSize="11"
+                                fontWeight="800"
+                                className="select-none font-sans"
+                              >
+                                {pt.leads}
+                              </text>
+                            </g>
                           );
                         })}
+
+                        {/* Linha Curvada das Views */}
+                        <path
+                          d={linePathD}
+                          fill="none"
+                          stroke="#10b981"
+                          strokeWidth="2.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          filter="url(#glowViews)"
+                        />
+
+                        {/* Pontos nas Views exatamente alinhados com centerX */}
+                        {points.map((pt, idx) => (
+                          <g key={`dot-group-${idx}`}>
+                            <circle
+                              cx={pt.centerX}
+                              cy={pt.viewsY}
+                              r="5"
+                              fill="#090f1d"
+                              stroke="#10b981"
+                              strokeWidth="2.5"
+                            />
+                            <circle
+                              cx={pt.centerX}
+                              cy={pt.viewsY}
+                              r="2"
+                              fill="#34d399"
+                            />
+                          </g>
+                        ))}
                       </svg>
 
-                      {/* Colunas de Leads (Barras) */}
-                      <div className="relative w-full h-full flex items-end justify-between gap-2 z-0 px-2">
-                        {chartData.map((item, idx) => {
-                          const leadHeightPct = Math.max(8, Math.round((item.leads / maxVal) * 100));
-                          return (
-                            <div
-                              key={idx}
-                              className="flex-1 flex flex-col items-center justify-end h-full group relative"
-                            >
-                              {/* Tooltip Hover */}
-                              <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 border border-slate-700 text-[10px] text-white py-1 px-2 rounded-lg whitespace-nowrap z-20 pointer-events-none shadow-xl">
-                                <div className="font-bold text-indigo-300">{item.label}</div>
-                                <div>Leads: <strong className="text-white">{item.leads}</strong> &bull; Views: <strong className="text-emerald-400">{item.views}</strong></div>
-                              </div>
-
-                              {/* Barra de Lead */}
-                              <div
-                                style={{ height: `${leadHeightPct}%` }}
-                                className="w-full max-w-[32px] sm:max-w-[42px] bg-gradient-to-t from-indigo-600/90 to-indigo-400 rounded-t-lg transition-all group-hover:from-indigo-500 group-hover:to-indigo-300 shadow-md shadow-indigo-600/20 relative"
-                              >
-                                <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] font-black text-indigo-200">
-                                  {item.leads}
+                      {/* Camada interativa invisível para Tooltips em Hover */}
+                      <div className="absolute inset-0 flex justify-between z-20">
+                        {points.map((pt, idx) => (
+                          <div
+                            key={`hover-col-${idx}`}
+                            className="flex-1 flex flex-col items-center justify-end h-full group relative cursor-pointer"
+                          >
+                            <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 text-[10px] text-white py-1.5 px-2.5 rounded-xl whitespace-nowrap pointer-events-none shadow-2xl shadow-black/80 z-30 translate-y-1 group-hover:translate-y-0">
+                              <div className="font-bold text-slate-300 border-b border-slate-800 pb-0.5 mb-1">{pt.label}</div>
+                              <div className="flex items-center gap-2">
+                                <span className="flex items-center gap-1">
+                                  <span className="w-2 h-2 rounded-xs bg-indigo-500" />
+                                  Leads: <strong className="text-white font-black">{pt.leads}</strong>
+                                </span>
+                                <span className="text-slate-600">&bull;</span>
+                                <span className="flex items-center gap-1">
+                                  <span className="w-2 h-2 rounded-xs bg-emerald-400" />
+                                  Views: <strong className="text-emerald-400 font-black">{pt.views}</strong>
                                 </span>
                               </div>
                             </div>
-                          );
-                        })}
+                          </div>
+                        ))}
                       </div>
                     </div>
 
-                    {/* Eixo X com Labels das Datas */}
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium px-2 pt-1 border-t border-slate-800/80">
+                    {/* Eixo X com Labels das Datas perfeitamente alinhadas */}
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium px-2 sm:px-4 pt-1.5 border-t border-slate-800/80">
                       {chartData.map((item, idx) => (
-                        <div key={idx} className="flex-1 text-center truncate">
+                        <div key={idx} className="flex-1 text-center truncate font-mono text-[10px] sm:text-[11px]">
                           {item.label}
                         </div>
                       ))}
@@ -476,17 +580,20 @@ export default function GestaoLeadsPage() {
             </div>
 
             {/* Rodapé Resumo do Gráfico */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/40 text-[11px] text-slate-400">
-              <span>
-                Crescimento nos últimos 7 dias: <strong className="text-emerald-400">+{stats.week_leads} leads</strong>
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-800/60 text-[11px] text-slate-400 relative z-10">
+              <span className="flex items-center gap-1.5">
+                <span>Crescimento nos últimos 7 dias:</span>
+                <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold">
+                  +{stats.week_leads} leads
+                </span>
               </span>
-              <span>
-                Taxa Média de Conversão:{" "}
-                <strong className="text-indigo-300">
+              <span className="flex items-center gap-1.5">
+                <span>Taxa Média de Conversão:</span>
+                <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-bold">
                   {stats.total_views > 0
                     ? `${(((stats.total_leads || 0) / stats.total_views) * 100).toFixed(1)}%`
                     : "0.0%"}
-                </strong>
+                </span>
               </span>
             </div>
           </div>
@@ -619,6 +726,5 @@ export default function GestaoLeadsPage() {
           )}
         </div>
       </div>
-    </PainelLayoutClient>
   );
 }

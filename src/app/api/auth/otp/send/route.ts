@@ -113,20 +113,24 @@ export async function POST(request: Request) {
 
       // 2. Registra o job na fila persistida do banco de dados (Central de Tarefas / BullMQ)
       const jobId = `job-otp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      await pool.query(
-        `INSERT INTO background_jobs (id, queue_name, name, payload, status, attempts, max_attempts) 
-         VALUES (?, 'whatsapp-messages-high', 'send-otp-message', ?, 'active', 1, 3)`,
-        [
-          jobId,
-          JSON.stringify({
-            userId: user.id,
-            userName: user.name,
-            phone: targetPhone,
-            instance: targetInstanceName,
-            otpCode,
-          }),
-        ]
-      );
+      try {
+        await pool.query(
+          `INSERT INTO background_jobs (id, queue_name, name, payload, status, attempts, max_attempts) 
+           VALUES (?, 'whatsapp-messages-high', 'send-otp-message', ?, 'active', 1, 3)`,
+          [
+            jobId,
+            JSON.stringify({
+              userId: user.id,
+              userName: user.name,
+              phone: targetPhone,
+              instance: targetInstanceName,
+              otpCode,
+            }),
+          ]
+        );
+      } catch (jobErr) {
+        console.warn("[OTP WHATSAPP] Aviso ao inserir background_job:", jobErr);
+      }
 
       const sendStart = Date.now();
       const sendResult = await sendEvolutionText(targetInstanceName, targetPhone, messageText);
@@ -137,33 +141,39 @@ export async function POST(request: Request) {
         console.log(`[OTP WHATSAPP] Código enviado com sucesso via Evolution API (${targetInstanceName}) para ${targetPhone}`);
 
         // Atualiza a tarefa como concluída na fila
-        await pool.query(
-          `UPDATE background_jobs 
-           SET status = 'completed', duration_ms = ?, processed_at = NOW(), finished_at = NOW() 
-           WHERE id = ?`,
-          [durationMs, jobId]
-        );
+        try {
+          await pool.query(
+            `UPDATE background_jobs 
+             SET status = 'completed', duration_ms = ?, processed_at = NOW(), finished_at = NOW() 
+             WHERE id = ?`,
+            [durationMs, jobId]
+          );
+        } catch {}
 
         // Atualiza métricas da instância
         if (targetInstanceId) {
-          await pool.query(
-            `UPDATE instances 
-             SET total_messages_sent = total_messages_sent + 1, last_activity_at = NOW() 
-             WHERE id = ?`,
-            [targetInstanceId]
-          );
+          try {
+            await pool.query(
+              `UPDATE instances 
+               SET total_messages_sent = total_messages_sent + 1, last_activity_at = NOW() 
+               WHERE id = ?`,
+              [targetInstanceId]
+            );
+          } catch {}
         }
       } else {
         whatsappErrorMessage = (sendResult.data as { error?: string })?.error || "Falha na comunicação com WhatsApp";
         console.warn(`[OTP WHATSAPP] Falha no envio via Evolution API (${targetInstanceName} para ${targetPhone}):`, sendResult.data);
 
         // Atualiza a tarefa como com falha na fila
-        await pool.query(
-          `UPDATE background_jobs 
-           SET status = 'failed', failed_reason = ?, duration_ms = ?, processed_at = NOW(), finished_at = NOW() 
-           WHERE id = ?`,
-          [whatsappErrorMessage, durationMs, jobId]
-        );
+        try {
+          await pool.query(
+            `UPDATE background_jobs 
+             SET status = 'failed', failed_reason = ?, duration_ms = ?, processed_at = NOW(), finished_at = NOW() 
+             WHERE id = ?`,
+            [whatsappErrorMessage, durationMs, jobId]
+          );
+        } catch {}
       }
     } catch (err: unknown) {
       whatsappErrorMessage = err instanceof Error ? err.message : "Erro no disparador de WhatsApp";

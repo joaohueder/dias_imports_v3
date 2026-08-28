@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDbPool, initAuthDatabase } from "@/lib/db";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
 import { logAudit, getClientIpAndAgent } from "@/lib/audit";
+import { signSessionToken } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 

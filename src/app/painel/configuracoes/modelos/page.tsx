@@ -27,9 +27,9 @@ import {
   Calendar,
   Star,
   CheckCircle,
+  Download,
 } from "lucide-react";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
-import { PainelLayoutClient } from "@/components/painel/PainelLayoutClient";
 import { IphoneMockupPreview } from "@/components/painel/IphoneMockupPreview";
 import { toast } from "sonner";
 
@@ -105,6 +105,7 @@ export default function PainelConfiguracoesModelosPage() {
   // Modal de Preview dedicado
   const [previewModalTemplate, setPreviewModalTemplate] = useState<TemplateItem | null>(null);
   const [previewModalProductId, setPreviewModalProductId] = useState<string>("sample");
+  const [importingPresets, setImportingPresets] = useState(false);
   const [formData, setFormData] = useState<{
     title: string;
     content: string;
@@ -200,6 +201,27 @@ export default function PainelConfiguracoesModelosPage() {
   const handleOpenPreviewModal = (tpl: TemplateItem) => {
     setPreviewModalTemplate(tpl);
     setPreviewModalProductId(products.length > 0 ? String(products[0].id) : "sample");
+  };
+
+  const handleImportPresets = async () => {
+    try {
+      setImportingPresets(true);
+      const res = await fetch("/api/painel/configuracoes/modelos/importar-padroes", {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(json.message);
+        fetchTemplates();
+      } else {
+        toast.error(json.message || "Erro ao importar modelos.");
+      }
+    } catch (error) {
+      console.error("Erro ao importar modelos pré-configurados:", error);
+      toast.error("Erro de conexão ao importar modelos.");
+    } finally {
+      setImportingPresets(false);
+    }
   };
 
   const handleInsertTag = (tag: string) => {
@@ -420,8 +442,7 @@ export default function PainelConfiguracoesModelosPage() {
   }
 
   return (
-    <PainelLayoutClient user={data?.user} company={data?.company}>
-      <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300">
         
         {/* CABEÇALHO DA PÁGINA */}
         <div className="flex flex-col gap-4 pb-6 border-b border-slate-800/80">
@@ -443,6 +464,19 @@ export default function PainelConfiguracoesModelosPage() {
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-3 w-full pt-1">
+            <button
+              onClick={handleImportPresets}
+              disabled={importingPresets}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50 whitespace-nowrap"
+            >
+              {importingPresets ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              Importar Modelos Pré-Configurados
+            </button>
+
             <button
               onClick={handleOpenCreateModal}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 transition-all shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer whitespace-nowrap"
@@ -964,6 +998,5 @@ export default function PainelConfiguracoesModelosPage() {
         )}
 
       </div>
-    </PainelLayoutClient>
   );
 }

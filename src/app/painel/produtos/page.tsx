@@ -34,7 +34,6 @@ import {
 } from "lucide-react";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 import { useLayout } from "@/context/LayoutContext";
-import { PainelLayoutClient } from "@/components/painel/PainelLayoutClient";
 import { Pagination } from "@/components/ui/Pagination";
 import { formatTimeAgo } from "@/lib/timeAgo";
 import { SendProductModal } from "@/components/painel/SendProductModal";
@@ -263,8 +262,7 @@ export default function ProdutosPage() {
   };
 
   return (
-    <PainelLayoutClient>
-      <div className="w-full space-y-6">
+    <div className="space-y-6">
         {/* 1. CABEÇALHO PADRÃO DA PÁGINA */}
         {/* Banner de Upgrade Estratégico se limite foi atingido */}
         {metrics.limit_products > 0 && metrics.total_products >= metrics.limit_products && (
@@ -650,9 +648,9 @@ export default function ProdutosPage() {
                                 <span className="text-[11px] text-slate-400 line-through decoration-rose-500/60 font-medium">
                                   {formatBRL(p.price)}
                                 </span>
-                                {p.price > p.promo_price && (
+                                {p.price > (p.promo_price || 0) && p.price > 0 && (
                                   <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 mt-0.5">
-                                    -{Math.round(((p.price - p.promo_price) / p.price) * 100)}%
+                                    -{Math.round(((p.price - (p.promo_price || 0)) / p.price) * 100)}%
                                   </span>
                                 )}
                               </div>
@@ -797,6 +795,5 @@ export default function ProdutosPage() {
           }}
         />
       </div>
-    </PainelLayoutClient>
   );
 }

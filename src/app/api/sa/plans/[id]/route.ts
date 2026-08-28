@@ -68,6 +68,7 @@ export async function PUT(
       max_leads,
       max_instances,
       is_featured,
+      is_public,
     } = body;
 
     if (!name || name.trim().length === 0) {
@@ -87,6 +88,7 @@ export async function PUT(
     const planStatus = status === "inactive" ? "inactive" : "active";
     const planCycle = billing_cycle || "monthly";
     const planFeatured = !!is_featured;
+    const planPublic = is_public !== undefined ? !!is_public : true;
 
     const [result] = await pool.query<ResultSetHeader>(
       `UPDATE plans SET 
@@ -101,7 +103,8 @@ export async function PUT(
         max_views = ?,
         max_leads = ?,
         max_instances = ?,
-        is_featured = ?
+        is_featured = ?,
+        is_public = ?
        WHERE id = ?`,
       [
         name.trim(),
@@ -116,6 +119,7 @@ export async function PUT(
         planMaxLeads,
         planMaxInstances,
         planFeatured,
+        planPublic,
         id,
       ]
     );

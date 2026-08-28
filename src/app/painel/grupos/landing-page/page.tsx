@@ -26,7 +26,6 @@ import {
   UserCheck,
   Link2,
 } from "lucide-react";
-import { PainelLayoutClient } from "@/components/painel/PainelLayoutClient";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 import { FloatingActionBar } from "@/components/ui/FloatingActionBar";
 import { GroupVipLandingTemplate } from "@/components/landing-templates/GroupVipLandingTemplate";
@@ -123,6 +122,7 @@ export default function PainelLandingPageGrupoPage() {
   });
 
   const [formData, setFormData] = useState<GroupLandingSettings>(initialData);
+  const [companyId, setCompanyId] = useState<number | string>(1);
 
   // Estados de simulação do Modal no Preview
   const [simulatedModalOpen, setSimulatedModalOpen] = useState(false);
@@ -142,8 +142,14 @@ export default function PainelLandingPageGrupoPage() {
       const res = await fetch("/api/painel/landing-page-grupo");
       if (res.ok) {
         const data = await res.json();
+        if (data.company_id) {
+          setCompanyId(data.company_id);
+        }
         if (data.success && data.landing_page) {
           const lp = data.landing_page;
+          if (lp.company_id) {
+            setCompanyId(lp.company_id);
+          }
           const loaded: GroupLandingSettings = {
             id: lp.id,
             title: lp.title || "Grupo VIP Exclusivo",
@@ -254,8 +260,7 @@ export default function PainelLandingPageGrupoPage() {
   };
 
   return (
-    <PainelLayoutClient>
-      <div className="space-y-6 pb-28">
+    <div className="space-y-6 pb-28">
         {/* CABEÇALHO UNIFICADO PADRÃO */}
         <div className="flex flex-col gap-4 pb-4 border-b border-slate-800/80">
           <div>
@@ -282,7 +287,7 @@ export default function PainelLandingPageGrupoPage() {
 
           <div className="flex flex-wrap items-center justify-end gap-2.5 w-full pt-1">
             <a
-              href={`/g/${formData.slug}`}
+              href={`/g/${companyId}/${formData.slug}`}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-300 bg-slate-800/80 hover:bg-slate-700 hover:text-white border border-slate-700 transition-all cursor-pointer shadow-sm"
@@ -363,11 +368,11 @@ export default function PainelLandingPageGrupoPage() {
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-200 flex items-center justify-between">
                       <span>Link da Landing Page (Slug)</span>
-                      <span className="text-[10px] text-slate-500 font-mono">/g/{formData.slug || "grupo-vip"}</span>
+                      <span className="text-[10px] text-slate-500 font-mono">/g/{companyId}/{formData.slug || "grupo-vip"}</span>
                     </label>
                     <div className="flex items-center rounded-xl bg-slate-900/90 border border-slate-800 focus-within:border-indigo-500/60 focus-within:ring-2 focus-within:ring-indigo-500/20 overflow-hidden">
-                      <span className="px-3 py-2.5 text-xs text-slate-500 bg-slate-950/60 border-r border-slate-800 select-none">
-                        /g/
+                      <span className="px-3 py-2.5 text-xs text-slate-500 bg-slate-950/60 border-r border-slate-800 select-none font-mono">
+                        /g/{companyId}/
                       </span>
                       <input
                         type="text"
@@ -780,7 +785,7 @@ export default function PainelLandingPageGrupoPage() {
                 Preview em Tempo Real
               </span>
               <a
-                href={`/g/${formData.slug}`}
+                href={`/g/${companyId}/${formData.slug}`}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-300 hover:text-white bg-indigo-600/30 hover:bg-indigo-600 border border-indigo-500/40 px-2 py-0.5 rounded-full transition-all cursor-pointer shadow-xs whitespace-nowrap"
@@ -935,6 +940,5 @@ export default function PainelLandingPageGrupoPage() {
           }}
         />
       </div>
-    </PainelLayoutClient>
   );
 }

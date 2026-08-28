@@ -905,20 +905,20 @@ export async function processAnalyticsAggregationJob(job: JobRecord): Promise<{ 
 }
 
 /**
- * Processa a rotina diária de verificação de assinaturas e expirações (cron-subscriptions)
+ * Processa a rotina periódica de verificação de assinaturas e expirações (cron-subscriptions)
  */
 export async function processCronSubscriptionsJob(job: JobRecord): Promise<{ success: boolean; error?: string; updatedCount?: number }> {
   const start = Date.now();
   const pool = getDbPool();
 
   try {
-    // 1. Marca como past_due ou expired assinaturas ativas com vencimento anterior a hoje
+    // Marca como expirada ('expired') as assinaturas ativas com vencimento anterior ao momento atual
     const [result] = await pool.query<ResultSetHeader>(
       `UPDATE subscriptions
-       SET status = 'past_due', updated_at = NOW()
+       SET status = 'expired', updated_at = NOW()
        WHERE status = 'active'
          AND current_period_end IS NOT NULL
-         AND current_period_end < CURDATE()`
+         AND current_period_end < NOW()`
     );
 
     const duration = Date.now() - start;

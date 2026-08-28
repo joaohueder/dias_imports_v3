@@ -36,7 +36,10 @@ export function getDbPool(): Pool {
   return pool;
 }
 
+let authDbInitialized = false;
+
 export async function initAuthDatabase(): Promise<void> {
+  if (authDbInitialized) return;
   const db = getDbPool();
 
   try {
@@ -119,6 +122,7 @@ export async function initAuthDatabase(): Promise<void> {
       max_leads INT NOT NULL DEFAULT 0,
       max_instances INT NOT NULL DEFAULT 1,
       is_featured BOOLEAN NOT NULL DEFAULT FALSE,
+      is_public BOOLEAN NOT NULL DEFAULT TRUE,
       sort_order INT NOT NULL DEFAULT 0,
       features JSON NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -288,7 +292,7 @@ export async function initAuthDatabase(): Promise<void> {
     // Colunas já existentes
   }
 
-  // Garante colunas de Meta Ads Pixel na tabela companies se já existia
+  // Garante colunas de Meta Ads Pixel e Onboarding na tabela companies se já existia
   try {
     await db.query(`
       ALTER TABLE companies 
@@ -299,6 +303,28 @@ export async function initAuthDatabase(): Promise<void> {
     `);
   } catch {
     // Colunas já existentes
+  }
+
+  // Garante colunas de onboarding na tabela companies se já existia
+  try {
+    await db.query(`
+      ALTER TABLE companies 
+      ADD COLUMN onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE AFTER address_state,
+      ADD COLUMN onboarding_current_step INT NOT NULL DEFAULT 1 AFTER onboarding_completed,
+      ADD COLUMN onboarding_completed_steps JSON NULL AFTER onboarding_current_step;
+    `);
+  } catch {
+    // Colunas já existentes
+  }
+
+  // Garante a coluna is_public na tabela plans se já existia
+  try {
+    await db.query(`
+      ALTER TABLE plans 
+      ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT TRUE AFTER is_featured;
+    `);
+  } catch {
+    // Coluna já existente
   }
 
   // Garante colunas adicionais em company_group_landing_pages se já existia
@@ -366,9 +392,51 @@ export async function initAuthDatabase(): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
+  // Garante colunas de OTP e WhatsApp na tabela users se já existia
+  try {
+    await db.query(`
+      ALTER TABLE users 
+      ADD COLUMN whatsapp VARCHAR(50) NULL AFTER email,
+      ADD COLUMN otp_code VARCHAR(10) NULL AFTER password,
+      ADD COLUMN otp_expires_at DATETIME NULL AFTER otp_code;
+    `);
+  } catch {}
+
+  // Garante coluna admin_whatsapp na tabela companies se já existia
+  try {
+    await db.query(`
+      ALTER TABLE companies 
+      ADD COLUMN admin_whatsapp VARCHAR(50) NULL AFTER whatsapp;
+    `);
+  } catch {}
+
+  // Garante tabelas de background_jobs, workers e queues se não existirem
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS background_jobs (
+      id VARCHAR(64) PRIMARY KEY,
+      queue_name VARCHAR(128) NOT NULL,
+      name VARCHAR(128) NOT NULL,
+      payload JSON NULL,
+      status ENUM('waiting', 'active', 'completed', 'failed', 'delayed') NOT NULL DEFAULT 'waiting',
+      attempts INT NOT NULL DEFAULT 0,
+      max_attempts INT NOT NULL DEFAULT 3,
+      failed_reason TEXT NULL,
+      duration_ms INT NULL,
+      processed_at DATETIME NULL,
+      finished_at DATETIME NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_queue_status (queue_name, status),
+      INDEX idx_status (status),
+      INDEX idx_created_at (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
   // Insere o super admin padrão inicial se não existir
   await db.query(`
     INSERT IGNORE INTO users (name, email, password, role, status)
     VALUES ('João Hueder', 'joaohueder@gmail.com', '123456', 'SUPER_ADMIN', 'active');
   `);
+
+  authDbInitialized = true;
 }

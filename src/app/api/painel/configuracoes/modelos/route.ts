@@ -59,24 +59,42 @@ export async function GET() {
     await ensureTemplateTableExists();
     const pool = getDbPool();
 
-    // Se a empresa ainda não tiver nenhum modelo cadastrado, gera um modelo inicial de exemplo
+    // Se a empresa ainda não tiver nenhum modelo cadastrado, busca snapshot da sa_message_templates
     const [existingCount] = await pool.query<RowDataPacket[]>(
       `SELECT COUNT(*) as total FROM company_message_templates WHERE company_id = ?`,
       [companyId]
     );
 
     if (existingCount[0].total === 0) {
-      await pool.query(
-        `INSERT INTO company_message_templates (company_id, title, content, type, status)
-         VALUES (?, ?, ?, ?, ?)`,
-        [
-          companyId,
-          "🔥 Oferta Exclusiva com Link e Preço",
-          "🚀 *{nome_produto}*\n\n{headline}\n\nDe: ~{preco_de}~\n🔥 *Por apenas: {preco_por}*\n\n🛒 Garanta o seu agora no link exclusivo:\n{link_produto}\n\n_Promoção por tempo limitado enquanto durarem os estoques!_",
-          "product_offer",
-          "active",
-        ]
-      );
+      try {
+        const [saTemplates] = await pool.query<RowDataPacket[]>(
+          `SELECT title, content, type FROM sa_message_templates WHERE status = 'active'`
+        );
+
+        if (saTemplates && saTemplates.length > 0) {
+          for (const tmpl of saTemplates) {
+            await pool.query(
+              `INSERT INTO company_message_templates (company_id, title, content, type, status)
+               VALUES (?, ?, ?, ?, 'active')`,
+              [companyId, tmpl.title, tmpl.content, tmpl.type || "product_offer"]
+            );
+          }
+        } else {
+          await pool.query(
+            `INSERT INTO company_message_templates (company_id, title, content, type, status)
+             VALUES (?, ?, ?, ?, ?)`,
+            [
+              companyId,
+              "🔥 Oferta Exclusiva com Link e Preço",
+              "🚀 *{nome_produto}*\n\n{headline}\n\nDe: ~{preco_de}~\n🔥 *Por apenas: {preco_por}*\n\n🛒 Garanta o seu agora no link exclusivo:\n{link_produto}\n\n_Promoção por tempo limitado enquanto durarem os estoques!_",
+              "product_offer",
+              "active",
+            ]
+          );
+        }
+      } catch (cloneErr) {
+        console.error("Erro ao clonar templates do SaaS para tenant:", cloneErr);
+      }
     }
 
     const [rows] = await pool.query<RowDataPacket[]>(

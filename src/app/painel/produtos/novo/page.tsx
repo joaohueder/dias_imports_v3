@@ -60,7 +60,6 @@ import { FONT_OPTIONS } from "@/components/landing-templates/fontOptions";
 import { SendProductModal } from "@/components/painel/SendProductModal";
 import { HeadlinePickerModal } from "@/components/landing-templates/HeadlinePickerModal";
 import { useLayout } from "@/context/LayoutContext";
-import { PainelLayoutClient } from "@/components/painel/PainelLayoutClient";
 import { FloatingActionBar } from "@/components/ui/FloatingActionBar";
 import { ImageCropperModal } from "@/components/ui/ImageCropperModal";
 import { OFFER_BOX_MODELS } from "@/components/landing-templates/OfferBox";
@@ -455,8 +454,7 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
   );
 
   return (
-    <PainelLayoutClient>
-      <div className="w-full space-y-6">
+    <div className="w-full space-y-6">
         {/* Banner Piscante e Estratégico de Limite Atingido */}
         {!isEditing && limitReached && (
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-950/90 via-rose-950/90 to-purple-950/90 border-2 border-amber-500/80 shadow-[0_0_30px_rgba(245,158,11,0.3)] animate-pulse p-4 sm:p-5">
@@ -1793,6 +1791,5 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
           />
         )}
       </div>
-    </PainelLayoutClient>
   );
 }

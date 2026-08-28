@@ -33,7 +33,6 @@ import {
 } from "lucide-react";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 import { useLayout } from "@/context/LayoutContext";
-import { PainelLayoutClient } from "@/components/painel/PainelLayoutClient";
 import { Pagination } from "@/components/ui/Pagination";
 
 interface GroupItem {
@@ -457,8 +456,7 @@ export default function GruposPage() {
   }, [groups, currentPage, pageSize]);
 
   return (
-    <PainelLayoutClient>
-      <div className="w-full space-y-6">
+    <div className="w-full space-y-6">
         {/* 1. CABEÇALHO PADRÃO DA PÁGINA */}
         {/* Banner de Upgrade Estratégico se limite de grupos foi atingido */}
         {metrics.limit_groups !== undefined && metrics.limit_groups > 0 && metrics.total_groups >= metrics.limit_groups && (
@@ -870,7 +868,6 @@ export default function GruposPage() {
             />
           </>
         )}
-      </div>
 
       {/* MODAL 1: SELEÇÃO E IMPORTAÇÃO DE GRUPOS DA INSTÂNCIA */}
       {instanceModalOpen && (
@@ -1227,6 +1224,6 @@ export default function GruposPage() {
           </div>
         </div>
       )}
-    </PainelLayoutClient>
+    </div>
   );
 }

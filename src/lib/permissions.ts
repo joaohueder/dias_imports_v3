@@ -16,6 +16,7 @@ export interface SystemUserPermissions {
   plans?: ModuleActionPermission;
   subscriptions?: ModuleActionPermission;
   users?: ModuleActionPermission;
+  message_templates?: ModuleActionPermission;
   migrations?: ModuleActionPermission;
   instances?: ModuleActionPermission;
   workers?: ModuleActionPermission;
@@ -65,6 +66,13 @@ export const SAAS_MODULES_DEFINITION = [
     id: "users",
     name: "Usuários do Sistema (SaaS)",
     description: "Controle de operadores, super admins e permissões",
+    category: "Governança e Empresas",
+    actions: ["view", "create", "edit", "delete"],
+  },
+  {
+    id: "message_templates",
+    name: "Modelos de Mensagens (SaaS)",
+    description: "Catálogo mestre de templates de ofertas clonados para novas empresas",
     category: "Governança e Empresas",
     actions: ["view", "create", "edit", "delete"],
   },

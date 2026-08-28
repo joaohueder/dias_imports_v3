@@ -50,7 +50,10 @@ export function Pm2StatusIndicator() {
 
   useEffect(() => {
     checkStatus();
-    const interval = setInterval(checkStatus, 10000);
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      checkStatus();
+    }, 25000);
 
     return () => {
       clearInterval(interval);

@@ -49,6 +49,7 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
     max_views: "0",
     max_leads: "0",
     is_featured: false,
+    is_public: true,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -78,6 +79,7 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
             max_views: String(data.plan.max_views ?? "0"),
             max_leads: String(data.plan.max_leads ?? "0"),
             is_featured: Boolean(data.plan.is_featured),
+            is_public: data.plan.is_public !== undefined ? Boolean(data.plan.is_public) : true,
           };
           setFormData(loaded);
           setInitialData(JSON.stringify(loaded));
@@ -217,6 +219,7 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
         max_views: "0",
         max_leads: "0",
         is_featured: false,
+        is_public: true,
       });
       setErrors({});
       toast.info("Formulário limpo.");
@@ -358,23 +361,44 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
                 />
               </div>
 
-              <div className="sm:col-span-2 flex items-center justify-between p-4 rounded-xl bg-slate-950/40 border border-slate-800/80">
-                <div>
-                  <span className="text-xs font-bold text-white block">Plano em Destaque</span>
-                  <span className="text-[11px] text-slate-400">
-                    Exibe selo de recomendado e destaque visual na contratação.
-                  </span>
+              <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex items-center justify-between p-4 rounded-xl bg-slate-950/40 border border-slate-800/80">
+                  <div>
+                    <span className="text-xs font-bold text-white block">Visibilidade Pública</span>
+                    <span className="text-[11px] text-slate-400">
+                      Disponível para os clientes assinarem ou realizarem upgrade no painel.
+                    </span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer ml-3">
+                    <input
+                      type="checkbox"
+                      name="is_public"
+                      checked={formData.is_public}
+                      onChange={handleChange}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                  </label>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="is_featured"
-                    checked={formData.is_featured}
-                    onChange={handleChange}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                </label>
+
+                <div className="flex items-center justify-between p-4 rounded-xl bg-slate-950/40 border border-slate-800/80">
+                  <div>
+                    <span className="text-xs font-bold text-white block">Plano em Destaque</span>
+                    <span className="text-[11px] text-slate-400">
+                      Exibe selo de recomendado e destaque visual na contratação.
+                    </span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer ml-3">
+                    <input
+                      type="checkbox"
+                      name="is_featured"
+                      checked={formData.is_featured}
+                      onChange={handleChange}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
               </div>
             </div>
           </div>

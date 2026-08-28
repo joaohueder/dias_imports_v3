@@ -130,7 +130,7 @@ export default function SubscriptionsPage() {
       icon: CheckCircle2,
     },
     past_due: {
-      label: "Inadimplente",
+      label: "Aguardando Pagamento",
       bg: "bg-amber-500/10",
       text: "text-amber-400",
       border: "border-amber-500/30",
@@ -220,7 +220,7 @@ export default function SubscriptionsPage() {
             >
               <option value="all" className="bg-slate-900 text-slate-200">Todos os Status</option>
               <option value="active" className="bg-slate-900 text-slate-200">Ativas</option>
-              <option value="past_due" className="bg-slate-900 text-slate-200">Inadimplentes</option>
+              <option value="past_due" className="bg-slate-900 text-slate-200">Aguardando Pagamento</option>
               <option value="canceled" className="bg-slate-900 text-slate-200">Canceladas</option>
               <option value="expired" className="bg-slate-900 text-slate-200">Expiradas</option>
             </select>

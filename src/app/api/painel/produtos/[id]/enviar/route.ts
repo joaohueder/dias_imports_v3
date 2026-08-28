@@ -38,7 +38,7 @@ export async function POST(
 
     const product = products[0];
 
-    // Validação de limite diário de envios da assinatura ativa
+    // Validação de assinatura ativa e limites diários
     const [subRows] = await pool.query<RowDataPacket[]>(
       `SELECT s.id, s.plan_snapshot_max_messages_day, p.max_messages_day as plan_max_messages_day
        FROM subscriptions s
@@ -50,9 +50,18 @@ export async function POST(
     );
 
     const activeSub = subRows[0] || null;
-    const limitDaily = activeSub
-      ? Number(activeSub.plan_snapshot_max_messages_day ?? activeSub.plan_max_messages_day ?? 1000)
-      : 500;
+
+    if (!activeSub) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Sua empresa não possui uma assinatura ativa para realizar disparos. Ative sua assinatura para continuar.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const limitDaily = Number(activeSub.plan_snapshot_max_messages_day ?? activeSub.plan_max_messages_day ?? 1000);
 
     // Busca grupos ativos aptos para envio de mensagens (abertos / permitidos)
     let groupQuery = `SELECT id, whatsapp_group_id, name, instance_id FROM company_whatsapp_groups WHERE company_id = ? AND status = 'active' AND group_type != 'closed' AND can_send_messages NOT IN ('admin_only', 'admin')`;

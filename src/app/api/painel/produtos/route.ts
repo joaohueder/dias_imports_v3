@@ -39,54 +39,6 @@ export async function GET(request: NextRequest) {
 
     const pool = getDbPool();
 
-    // Garante que a tabela exista
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS company_products (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        company_id INT NOT NULL,
-        name VARCHAR(255) NOT NULL,
-        slug VARCHAR(255) NOT NULL,
-        description TEXT NULL,
-        price DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
-        promo_price DECIMAL(10, 2) NULL,
-        status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
-        is_archived BOOLEAN NOT NULL DEFAULT FALSE,
-        images JSON NULL,
-        cover_image TEXT NULL,
-        whatsapp_destination VARCHAR(50) NULL DEFAULT 'default',
-        meta_ads_active BOOLEAN NOT NULL DEFAULT FALSE,
-        layout_color VARCHAR(50) NULL DEFAULT '#6366f1',
-        layout_theme VARCHAR(50) NULL DEFAULT 'dark',
-        cta_text VARCHAR(100) NULL DEFAULT 'Comprar no WhatsApp',
-        headline VARCHAR(255) NULL,
-        guarantee_text VARCHAR(255) NULL,
-        benefits JSON NULL,
-        external_link TEXT NULL,
-        sends_count INT NOT NULL DEFAULT 0,
-        views_count INT NOT NULL DEFAULT 0,
-        clicks_count INT NOT NULL DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_company_products_company (company_id),
-        INDEX idx_company_products_slug (company_id, slug)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    // Garante que a coluna sends_count exista caso a tabela já tenha sido criada
-    try {
-      await pool.query(`ALTER TABLE company_products ADD COLUMN sends_count INT NOT NULL DEFAULT 0 AFTER external_link`);
-    } catch {
-      // Ignora caso a coluna já exista
-    }
-
-    // Garante as colunas last_accessed_at e is_archived caso a tabela já exista
-    try {
-      await pool.query(`ALTER TABLE company_products ADD COLUMN last_accessed_at TIMESTAMP NULL DEFAULT NULL AFTER clicks_count`);
-    } catch {}
-    try {
-      await pool.query(`ALTER TABLE company_products ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT FALSE AFTER status`);
-    } catch {}
-
     let query = `
       SELECT id, company_id, name, slug, description, price, promo_price, status, is_archived,
              images, cover_image, layout_template, whatsapp_destination,
@@ -309,7 +261,7 @@ export async function POST(request: NextRequest) {
 
     const pool = getDbPool();
 
-    // Validação de limite de produtos do plano/assinatura ativa
+    // Validação de assinatura ativa e limites de produtos
     const [subRows] = await pool.query<RowDataPacket[]>(
       `SELECT s.id, s.plan_snapshot_max_products, p.max_products as plan_max_products
        FROM subscriptions s
@@ -321,9 +273,18 @@ export async function POST(request: NextRequest) {
     );
 
     const activeSub = subRows[0] || null;
-    const limitProducts = activeSub
-      ? Number(activeSub.plan_snapshot_max_products ?? activeSub.plan_max_products ?? 0)
-      : 0;
+
+    if (!activeSub) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Sua empresa não possui uma assinatura ativa. Ative um plano para cadastrar produtos no catálogo.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const limitProducts = Number(activeSub.plan_snapshot_max_products ?? activeSub.plan_max_products ?? 0);
 
     if (limitProducts > 0) {
       const [countRows] = await pool.query<RowDataPacket[]>(

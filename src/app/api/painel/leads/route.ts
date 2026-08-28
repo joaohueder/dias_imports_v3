@@ -62,36 +62,55 @@ export async function GET(req: NextRequest) {
 
     query += ` ORDER BY l.id DESC LIMIT 500`;
 
-    const [leads] = await pool.query<RowDataPacket[]>(query, params);
+    // Executa as consultas em paralelo para acelerar resposta
+    const [
+      [leads],
+      [subRows],
+      [statsRows],
+      [viewsRows],
+      [dailyLeadsRows],
+    ] = await Promise.all([
+      pool.query<RowDataPacket[]>(query, params),
+      pool.query<RowDataPacket[]>(
+        `SELECT 
+          COALESCE(
+            (SELECT s.plan_snapshot_max_leads FROM subscriptions s WHERE s.company_id = c.id AND s.status = 'active' ORDER BY s.id DESC LIMIT 1),
+            (SELECT p.max_leads FROM subscriptions s JOIN plans p ON p.id = s.plan_id WHERE s.company_id = c.id AND s.status = 'active' ORDER BY s.id DESC LIMIT 1),
+            0
+          ) as max_leads
+         FROM companies c
+         WHERE c.id = ?
+         LIMIT 1`,
+        [companyId]
+      ),
+      pool.query<RowDataPacket[]>(
+        `SELECT 
+          COUNT(*) as total_leads,
+          COUNT(DISTINCT whatsapp) as unique_leads,
+          SUM(CASE WHEN created_at >= CURDATE() THEN 1 ELSE 0 END) as today_leads,
+          SUM(CASE WHEN created_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND created_at < CURDATE() THEN 1 ELSE 0 END) as yesterday_leads,
+          SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as week_leads
+         FROM company_leads
+         WHERE company_id = ?`,
+        [companyId]
+      ),
+      pool.query<RowDataPacket[]>(
+        `SELECT COALESCE(SUM(views_count), 0) as total_views FROM company_group_landing_pages WHERE company_id = ?`,
+        [companyId]
+      ),
+      pool.query<RowDataPacket[]>(
+        `SELECT 
+          DATE(created_at) as date_val,
+          COUNT(*) as leads_count
+         FROM company_leads
+         WHERE company_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+         GROUP BY DATE(created_at)
+         ORDER BY date_val ASC`,
+        [companyId]
+      ),
+    ]);
 
-    // 1. Limite da assinatura da empresa
-    const [subRows] = await pool.query<RowDataPacket[]>(
-      `SELECT 
-        COALESCE(
-          (SELECT s.plan_snapshot_max_leads FROM subscriptions s WHERE s.company_id = c.id AND s.status = 'active' ORDER BY s.id DESC LIMIT 1),
-          (SELECT p.max_leads FROM subscriptions s JOIN plans p ON p.id = s.plan_id WHERE s.company_id = c.id AND s.status = 'active' ORDER BY s.id DESC LIMIT 1),
-          0
-        ) as max_leads
-       FROM companies c
-       WHERE c.id = ?
-       LIMIT 1`,
-      [companyId]
-    );
     const maxLeads = subRows.length > 0 ? Number(subRows[0].max_leads || 0) : 0;
-
-    // 2. Métricas gerais de leads da empresa (Total, Únicos, Hoje, Ontem, etc.)
-    const [statsRows] = await pool.query<RowDataPacket[]>(
-      `SELECT 
-        COUNT(*) as total_leads,
-        COUNT(DISTINCT whatsapp) as unique_leads,
-        SUM(CASE WHEN DATE(created_at) = CURDATE() THEN 1 ELSE 0 END) as today_leads,
-        SUM(CASE WHEN DATE(created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY) THEN 1 ELSE 0 END) as yesterday_leads,
-        SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as week_leads
-       FROM company_leads
-       WHERE company_id = ?`,
-      [companyId]
-    );
-
     const stats = statsRows[0] || {
       total_leads: 0,
       unique_leads: 0,
@@ -99,25 +118,7 @@ export async function GET(req: NextRequest) {
       yesterday_leads: 0,
       week_leads: 0,
     };
-
-    // 3. Total de Views das Landing Pages da empresa
-    const [viewsRows] = await pool.query<RowDataPacket[]>(
-      `SELECT COALESCE(SUM(views_count), 0) as total_views FROM company_group_landing_pages WHERE company_id = ?`,
-      [companyId]
-    );
     const totalViews = viewsRows.length > 0 ? Number(viewsRows[0].total_views || 0) : 0;
-
-    // 4. Histórico dos últimos 7 dias para evolução de leads por data
-    const [dailyLeadsRows] = await pool.query<RowDataPacket[]>(
-      `SELECT 
-        DATE(created_at) as date_val,
-        COUNT(*) as leads_count
-       FROM company_leads
-       WHERE company_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
-       GROUP BY DATE(created_at)
-       ORDER BY date_val ASC`,
-      [companyId]
-    );
 
     // Monta os últimos 7 dias consecutivos
     const last7Days: { date: string; label: string; leads: number; views: number }[] = [];
@@ -169,8 +170,8 @@ export async function GET(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const companyUser = await getCurrentCompanyUser(req);
-    const saUser = await getCurrentSaUser(req);
+    const companyUser = await getCurrentCompanyUser();
+    const saUser = await getCurrentSaUser();
 
     const companyId = companyUser?.company_id || saUser?.company_id;
     if (!companyId) {

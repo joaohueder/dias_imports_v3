@@ -60,19 +60,29 @@ export async function GET(request: NextRequest) {
 
     query += ` ORDER BY id DESC`;
 
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
-
-    // Métricas resumidas e limites de assinatura
-    const [metricsRows] = await pool.query<RowDataPacket[]>(
-      `SELECT 
-        COUNT(*) as total_groups,
-        SUM(participants_count) as total_participants,
-        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_groups,
-        SUM(CASE WHEN can_send_messages = 'admin_only' THEN 1 ELSE 0 END) as closed_groups
-       FROM company_whatsapp_groups
-       WHERE company_id = ?`,
-      [companyId]
-    );
+    // Executa consultas em paralelo para acelerar resposta da tela
+    const [[rows], [metricsRows], [subRows]] = await Promise.all([
+      pool.query<RowDataPacket[]>(query, params),
+      pool.query<RowDataPacket[]>(
+        `SELECT 
+          COUNT(*) as total_groups,
+          COALESCE(SUM(participants_count), 0) as total_participants,
+          SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_groups,
+          SUM(CASE WHEN can_send_messages = 'admin_only' THEN 1 ELSE 0 END) as closed_groups
+         FROM company_whatsapp_groups
+         WHERE company_id = ?`,
+        [companyId]
+      ),
+      pool.query<RowDataPacket[]>(
+        `SELECT s.id, s.plan_snapshot_max_groups, p.max_groups as plan_max_groups
+         FROM subscriptions s
+         LEFT JOIN plans p ON s.plan_id = p.id
+         WHERE s.company_id = ? AND s.status = 'active'
+         ORDER BY s.id DESC
+         LIMIT 1`,
+        [companyId]
+      ),
+    ]);
 
     const metrics = metricsRows[0] || {
       total_groups: 0,
@@ -80,17 +90,6 @@ export async function GET(request: NextRequest) {
       active_groups: 0,
       closed_groups: 0,
     };
-
-    // Consulta limite de grupos do plano da assinatura ativa
-    const [subRows] = await pool.query<RowDataPacket[]>(
-      `SELECT s.id, s.plan_snapshot_max_groups, p.max_groups as plan_max_groups
-       FROM subscriptions s
-       LEFT JOIN plans p ON s.plan_id = p.id
-       WHERE s.company_id = ? AND s.status = 'active'
-       ORDER BY s.id DESC
-       LIMIT 1`,
-      [companyId]
-    );
 
     const activeSub = subRows[0] || null;
     const limitGroups = activeSub
@@ -152,7 +151,7 @@ export async function POST(request: NextRequest) {
 
     const pool = getDbPool();
 
-    // Validação de limite de grupos da assinatura ativa
+    // Validação de assinatura ativa e limites de grupos
     const [subRows] = await pool.query<RowDataPacket[]>(
       `SELECT s.id, s.plan_snapshot_max_groups, p.max_groups as plan_max_groups
        FROM subscriptions s
@@ -164,9 +163,18 @@ export async function POST(request: NextRequest) {
     );
 
     const activeSub = subRows[0] || null;
-    const limitGroups = activeSub
-      ? Number(activeSub.plan_snapshot_max_groups ?? activeSub.plan_max_groups ?? 10)
-      : 10;
+
+    if (!activeSub) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Sua empresa não possui uma assinatura ativa. Ative um plano para adicionar e monitorar grupos de WhatsApp.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const limitGroups = Number(activeSub.plan_snapshot_max_groups ?? activeSub.plan_max_groups ?? 10);
 
     if (limitGroups > 0) {
       const [countRows] = await pool.query<RowDataPacket[]>(

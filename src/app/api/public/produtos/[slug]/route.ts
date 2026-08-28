@@ -32,9 +32,9 @@ export async function GET(
     const product = rows[0];
     const companyId = product.company_id;
 
-    // Verificar se o limite de visualizações do plano/assinatura da empresa foi atingido
+    // Verificar se a empresa possui assinatura ativa
     const [subRows] = await pool.query<RowDataPacket[]>(
-      `SELECT s.id, s.plan_snapshot_max_views, p.max_views as plan_max_views
+      `SELECT s.id, s.status, s.plan_snapshot_max_views, p.max_views as plan_max_views
        FROM subscriptions s
        LEFT JOIN plans p ON s.plan_id = p.id
        WHERE s.company_id = ? AND s.status = 'active'
@@ -44,9 +44,23 @@ export async function GET(
     );
 
     const activeSub = subRows[0] || null;
-    const limitViews = activeSub
-      ? Number(activeSub.plan_snapshot_max_views ?? activeSub.plan_max_views ?? 0)
-      : 0;
+
+    // Bloqueia exibição pública se a empresa não tiver assinatura ativa
+    if (!activeSub) {
+      return NextResponse.json(
+        {
+          success: false,
+          limited_view: true,
+          error_code: "SUBSCRIPTION_INACTIVE",
+          message: "Esta oferta está temporariamente indisponível no momento.",
+          company_name: product.company_name,
+          target_whatsapp: (product.company_whatsapp || product.company_admin_whatsapp || product.company_phone || "").replace(/\D/g, ""),
+        },
+        { status: 403 }
+      );
+    }
+
+    const limitViews = Number(activeSub.plan_snapshot_max_views ?? activeSub.plan_max_views ?? 0);
 
     if (limitViews > 0) {
       const [viewsSumRows] = await pool.query<RowDataPacket[]>(

@@ -29,8 +29,8 @@ import {
   BarChart3,
   ExternalLink,
   ChevronRight,
+  ListChecks,
 } from "lucide-react";
-import { PainelLayoutClient } from "@/components/painel/PainelLayoutClient";
 import { formatCurrencyBRL } from "@/lib/formatters";
 
 interface DashboardData {
@@ -53,6 +53,9 @@ interface DashboardData {
     status: string;
     max_instances: number;
     max_messages_day: number;
+    onboarding_completed?: boolean;
+    onboarding_current_step?: number;
+    onboarding_completed_steps?: number[];
   };
   stats: {
     totalInstances: number;
@@ -137,6 +140,10 @@ export default function CompanyDashboardPage() {
     if (!isSilent) setRefreshing(true);
     try {
       const res = await fetch("/api/painel/dashboard");
+      if (res.status === 401) {
+        window.location.href = "/painel/login";
+        return;
+      }
       if (res.ok) {
         const json = await res.json();
         if (json.success) {
@@ -190,8 +197,7 @@ export default function CompanyDashboardPage() {
   );
 
   return (
-    <PainelLayoutClient user={data?.user} company={data?.company}>
-      <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300">
         
         {/* 1. CABEÇALHO PADRÃO DA PÁGINA */}
         <div className="flex flex-col gap-4 pb-6 border-b border-slate-800/80">
@@ -220,7 +226,7 @@ export default function CompanyDashboardPage() {
               type="button"
               onClick={() => fetchDashboardData()}
               disabled={refreshing}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 transition-all cursor-pointer whitespace-nowrap"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 shadow-sm transition-all cursor-pointer whitespace-nowrap"
             >
               <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${refreshing ? "animate-spin" : ""}`} />
               <span>Atualizar</span>
@@ -482,20 +488,20 @@ export default function CompanyDashboardPage() {
             <div className="flex items-center gap-5 text-slate-400 text-[11px]">
               <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <span>Disparos: <strong className="text-slate-200">{chartData.reduce((acc, d) => acc + d.sends, 0)}</strong></span>
+                <span>Disparos: <strong className="text-slate-200">{chartData.reduce((acc, d) => acc + (Number(d.sends) || 0), 0)}</strong></span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
-                <span>Leads: <strong className="text-slate-200">{chartData.reduce((acc, d) => acc + d.leads, 0)}</strong></span>
+                <span>Leads: <strong className="text-slate-200">{chartData.reduce((acc, d) => acc + (Number(d.leads) || 0), 0)}</strong></span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-cyan-500" />
-                <span>Visualizações: <strong className="text-slate-200">{chartData.reduce((acc, d) => acc + d.views, 0)}</strong></span>
+                <span>Visualizações: <strong className="text-slate-200">{chartData.reduce((acc, d) => acc + (Number(d.views) || 0), 0)}</strong></span>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-[11px] text-slate-500 font-mono">
-                Média: ~{Math.round(chartData.reduce((acc, d) => acc + (activeChartMetric === "sends" ? d.sends : activeChartMetric === "leads" ? d.leads : d.views), 0) / 7)} / dia
+                Média: ~{chartData.length > 0 ? Math.round(chartData.reduce((acc, d) => acc + (activeChartMetric === "sends" ? (Number(d.sends) || 0) : activeChartMetric === "leads" ? (Number(d.leads) || 0) : (Number(d.views) || 0)), 0) / chartData.length) || 0 : 0} / dia
               </span>
               <div className="h-3 w-px bg-slate-800" />
               <Link
@@ -687,6 +693,5 @@ export default function CompanyDashboardPage() {
         </div>
 
       </div>
-    </PainelLayoutClient>
   );
 }

@@ -4,11 +4,16 @@ import { getDbPool } from "@/lib/db";
 import { RowDataPacket } from "mysql2";
 import os from "os";
 
-export async function GET() {
+export const dynamic = "force-dynamic";
+
+export async function GET(req: Request) {
   try {
-    const auth = await requireSaPermission("workers", "view");
-    if (!auth.authorized) {
-      return auth.response;
+    const isInternalDaemon = req.headers.get("x-worker-internal") === "daemon";
+    if (!isInternalDaemon) {
+      const auth = await requireSaPermission("workers", "view");
+      if (!auth.authorized) {
+        return auth.response;
+      }
     }
 
     const pool = getDbPool();

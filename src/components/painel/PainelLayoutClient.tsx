@@ -37,6 +37,7 @@ import { SYSTEM_VERSION, SYSTEM_NAME } from "@/lib/config";
 import { useLayout } from "@/context/LayoutContext";
 import { CompanyWhatsappStatusIndicator } from "./CompanyWhatsappStatusIndicator";
 import { ClusterStatusIndicator } from "./ClusterStatusIndicator";
+import { SubscriptionBlockedBanner, SubscriptionBlockedCard } from "./SubscriptionBlockedState";
 
 interface PainelLayoutClientProps {
   children: React.ReactNode;
@@ -53,6 +54,8 @@ interface PainelLayoutClientProps {
     plan: string;
     status: string;
     max_instances?: number;
+    has_active_subscription?: boolean;
+    subscription_status?: string;
   } | null;
 }
 
@@ -122,7 +125,7 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
     role: string;
     isLoaded: boolean;
   }>({
-    name: initialUser?.name || "Administrador da Empresa",
+    name: initialUser?.name || "",
     email: initialUser?.email || "",
     role: initialUser?.role || "COMPANY_ADMIN",
     isLoaded: !!initialUser,
@@ -135,13 +138,23 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
     status: string;
     subscription_end?: string | null;
     admin_whatsapp?: string | null;
+    has_active_subscription?: boolean;
+    subscription_status?: string;
+    onboarding_completed?: boolean;
+    onboarding_current_step?: number;
+    isLoaded: boolean;
   }>({
-    id: initialCompany?.id || 1,
-    name: initialCompany?.name || "JH7 Marketing",
-    plan: initialCompany?.plan || "Pro",
+    id: initialCompany?.id || 0,
+    name: initialCompany?.name || "",
+    plan: initialCompany?.plan || "",
     status: initialCompany?.status || "active",
     subscription_end: null,
     admin_whatsapp: null,
+    has_active_subscription: initialCompany?.has_active_subscription ?? true,
+    subscription_status: initialCompany?.subscription_status ?? "active",
+    onboarding_completed: true,
+    onboarding_current_step: 1,
+    isLoaded: !!initialCompany,
   });
 
   const [quotas, setQuotas] = useState<{
@@ -175,12 +188,16 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
     async function loadData() {
       try {
         const res = await fetch("/api/painel/dashboard");
+        if (res.status === 401) {
+          window.location.href = "/painel/login";
+          return;
+        }
         if (res.ok) {
           const json = await res.json();
           if (json.success) {
             if (json.user) {
               setUserData({
-                name: json.user.name || "Administrador da Empresa",
+                name: json.user.name || "Minha Empresa",
                 email: json.user.email || "",
                 role: json.user.role || "COMPANY_ADMIN",
                 isLoaded: true,
@@ -188,34 +205,29 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
             }
             if (json.company) {
               setCompanyData({
-                id: json.company.id || 1,
-                name: json.company.name || "JH7 Marketing",
-                plan: json.company.plan || "Pro",
+                id: json.company.id || 0,
+                name: json.company.name || "Minha Empresa",
+                plan: json.company.plan || "Plano",
                 status: json.company.status || "active",
                 subscription_end: json.company.subscription_end || null,
                 admin_whatsapp: json.company.admin_whatsapp || null,
+                has_active_subscription: json.hasActiveSubscription ?? json.company.has_active_subscription ?? true,
+                subscription_status: json.subscriptionStatus ?? json.company.subscription_status ?? "active",
+                onboarding_completed: json.company.onboarding_completed ?? true,
+                onboarding_current_step: json.company.onboarding_current_step || 1,
+                isLoaded: true,
               });
             }
             if (json.quotas) {
               setQuotas(json.quotas);
             }
-          }
-        }
-      } catch {
-        // Fallback silencioso
-      }
-
-      // Checa status de limite excedido
-      try {
-        const limRes = await fetch("/api/painel/limits-status", { cache: "no-store" });
-        if (limRes.ok) {
-          const limJson = await limRes.json();
-          if (limJson.success) {
-            setLimitsExceededInfo({
-              exceeded: !!limJson.exceeded,
-              exceededItems: limJson.exceededItems || [],
-              plan_name: limJson.plan_name,
-            });
+            if (json.limits) {
+              setLimitsExceededInfo({
+                exceeded: !!json.limits.exceeded,
+                exceededItems: json.limits.exceededItems || [],
+                plan_name: json.limits.plan_name,
+              });
+            }
           }
         }
       } catch {
@@ -223,7 +235,7 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
       }
     }
     loadData();
-  }, [initialUser, initialCompany, pathname]);
+  }, [initialUser, initialCompany]);
 
   const [isImpersonating, setIsImpersonating] = useState(false);
 
@@ -320,32 +332,6 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
     }
   };
 
-  // Se for a tela de login, não renderiza sidebar/layout
-  if (pathname === "/painel/login") {
-    return <>{children}</>;
-  }
-
-  const userName = userData.name;
-  const userEmail = userData.email;
-  const userInitials = getInitials(userName);
-  const companyName = companyData.name;
-  const companyPlan = companyData.plan;
-
-  // Função auxiliar para calcular estilos de alerta dinâmico de limites (0-50% verde, 51-90% amarelo, >90% vermelho piscando)
-  const getQuotaStatusClass = (current: number, limit: number) => {
-    if (!limit || limit <= 0) {
-      return "text-emerald-400 font-semibold";
-    }
-    const percent = (current / limit) * 100;
-    if (percent > 90) {
-      return "text-rose-400 font-bold animate-pulse drop-shadow-[0_0_8px_rgba(244,63,94,0.6)]";
-    }
-    if (percent > 50) {
-      return "text-amber-400 font-semibold";
-    }
-    return "text-emerald-400 font-semibold";
-  };
-
   // Formatação amigável da data final da assinatura
   const formattedSubscriptionEnd = useMemo(() => {
     if (!companyData.subscription_end) return null;
@@ -375,6 +361,32 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
     }
     return wa;
   }, [companyData.admin_whatsapp]);
+
+  // Se for a tela de login, não renderiza sidebar/layout
+  if (pathname === "/painel/login") {
+    return <>{children}</>;
+  }
+
+  const userName = userData.name || (userData.isLoaded ? "Administrador" : "");
+  const userEmail = userData.email;
+  const userInitials = userData.name ? getInitials(userData.name) : "EP";
+  const companyName = companyData.name || (companyData.isLoaded ? "Empresa" : "");
+  const companyPlan = companyData.plan || "";
+
+  // Função auxiliar para calcular estilos de alerta dinâmico de limites (0-50% verde, 51-90% amarelo, >90% vermelho piscando)
+  const getQuotaStatusClass = (current: number, limit: number) => {
+    if (!limit || limit <= 0) {
+      return "text-emerald-400 font-semibold";
+    }
+    const percent = (current / limit) * 100;
+    if (percent > 90) {
+      return "text-rose-400 font-bold animate-pulse drop-shadow-[0_0_8px_rgba(244,63,94,0.6)]";
+    }
+    if (percent > 50) {
+      return "text-amber-400 font-semibold";
+    }
+    return "text-emerald-400 font-semibold";
+  };
 
   return (
     <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col items-center font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
@@ -407,8 +419,17 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
         </div>
       )}
 
+      {/* TARJA VERMELHA FIXA NO TOPO - ASSINATURA INATIVA / EXPIRADA / BLOQUEADA */}
+      {!companyData.has_active_subscription && (
+        <SubscriptionBlockedBanner
+          status={companyData.subscription_status}
+          planName={companyPlan}
+          isImpersonating={isImpersonating}
+        />
+      )}
+
       {/* TARJA VERMELHA FIXA NO TOPO - LIMITE DA ASSINATURA ATINGIDO */}
-      {limitsExceededInfo.exceeded && (
+      {companyData.has_active_subscription && limitsExceededInfo.exceeded && (
         <div
           className={`fixed left-0 right-0 z-50 bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white shadow-xl shadow-red-950/60 border-b border-red-400/30 transition-all ${
             isImpersonating ? "top-8" : "top-0"
@@ -443,7 +464,11 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
       {/* 1. HEADER FIXO COM CONTAINER LARGURA MÁXIMA */}
       <header
         className={`fixed left-0 right-0 z-40 h-16 bg-[#090f1d]/90 backdrop-blur-xl border-b border-slate-800/80 flex justify-center shadow-lg shadow-black/40 transition-all ${
-          limitsExceededInfo.exceeded
+          !companyData.has_active_subscription
+            ? isImpersonating
+              ? "top-[80px]"
+              : "top-[48px]"
+            : limitsExceededInfo.exceeded
             ? isImpersonating
               ? "top-[76px]"
               : "top-[44px]"
@@ -533,8 +558,17 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
                   <span className="text-xs font-semibold text-slate-200 group-hover:text-white transition-colors truncate max-w-[130px]">
                     {userName}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-mono truncate max-w-[130px]" title="Data final da assinatura">
-                    {formattedSubscriptionEnd ? `Validade: ${formattedSubscriptionEnd}` : "Sem expiração"}
+                  <span
+                    className={`text-[10px] font-mono truncate max-w-[130px] ${
+                      !companyData.has_active_subscription ? "text-rose-400 font-semibold" : "text-slate-400"
+                    }`}
+                    title="Status e validade da assinatura"
+                  >
+                    {!companyData.has_active_subscription
+                      ? "Sem assinatura"
+                      : formattedSubscriptionEnd
+                      ? `Validade: ${formattedSubscriptionEnd}`
+                      : "Sem expiração"}
                   </span>
                 </div>
 
@@ -620,7 +654,11 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
       {/* 2. CORPO (BARRA DE MENU LATERAL + MAIN) CENTRALIZADO NA LARGURA (1200px) */}
       <div
         className={`w-full flex-1 flex justify-center pb-12 min-h-screen ${
-          limitsExceededInfo.exceeded
+          !companyData.has_active_subscription
+            ? isImpersonating
+              ? "pt-[144px]"
+              : "pt-[112px]"
+            : limitsExceededInfo.exceeded
             ? isImpersonating
               ? "pt-[140px]"
               : "pt-[108px]"
@@ -916,7 +954,15 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
           {/* 3. MAIN (CONTEÚDO PRINCIPAL) */}
           <main className="flex-1 transition-all duration-300 w-full min-w-0 p-4 sm:p-5 lg:p-6">
             <div className="mx-auto space-y-4">
-              {children}
+              {!companyData.has_active_subscription && pathname !== "/painel/configuracoes/assinatura" ? (
+                <SubscriptionBlockedCard
+                  title="Recurso Bloqueado por Falta de Assinatura"
+                  description="Para acessar seus grupos, produtos, leads, modelos de mensagens e automações, regularize ou ative a assinatura da sua empresa."
+                  actionText="Ativar / Renovar Assinatura"
+                />
+              ) : (
+                children
+              )}
             </div>
           </main>
         </div>
@@ -934,13 +980,19 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
               <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
               <span className="truncate max-w-[120px] sm:max-w-none">{companyName}</span>
             </span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-              Plano {companyPlan}
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${
+                !companyData.has_active_subscription
+                  ? "bg-rose-500/15 text-rose-400 border-rose-500/30"
+                  : "bg-indigo-500/15 text-indigo-300 border-indigo-500/30"
+              }`}
+            >
+              {!companyData.has_active_subscription ? "Sem Assinatura" : `Plano ${companyPlan}`}
             </span>
           </div>
 
-          {/* Centro: Limites da Assinatura */}
-          {quotas && (
+          {/* Centro: Limites da Assinatura (exibido apenas quando houver assinatura ativa) */}
+          {companyData.has_active_subscription && quotas && (
             <div className="hidden md:flex items-center gap-3 lg:gap-4 text-[11px]">
               <div className="flex items-center gap-1.5" title="Limite de Grupos WhatsApp">
                 <Users2 className="w-3.5 h-3.5 text-indigo-400" />

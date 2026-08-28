@@ -1,7 +1,7 @@
 # Documentação & Memória: Módulo de Assinaturas (/sa/subscriptions)
 
-**Data:** 2026-08-27  
-**Versão:** 2026.08.0481  
+**Data:** 2026-08-28  
+**Versão:** 2026.08.0540  
 **Responsável Técnico:** JH7-DESENVOLVEDOR, JH7-DESIGNER, JH7-MESTRE-DOCUMENTACAO, JH7-SECURITY-GUARDIAN  
 
 ---
@@ -15,6 +15,7 @@ O módulo **Assinaturas** no painel do Super Admin ([src/app/sa/subscriptions/pa
    - A listagem carrega por padrão filtrando as assinaturas com status `active` (ativas).
    - Menu rápido com abas segmentadas por status: `Ativas`, `Inadimplentes`, `Canceladas`, `Expiradas` e `Todas` (sem opção de degustação/trialing).
    - Botão dinâmico de **Limpar Filtros** na barra de busca e no estado vazio.
+   - **Rotina Automática de Expiração (Worker cron-subscriptions)**: A verificação periódica compara a vigência (`current_period_end < NOW()`) com precisão de timestamp (DATETIME), garantindo que assinaturas expiradas no mesmo dia com horário anterior sejam imediatamente marcadas com o status `expired`.
 
 2. **Organização Visual & UX Aprimorada:**
    - Alinhamento vertical centralizado (`align-middle`) com larguras de colunas proporcionais equilibradas.

@@ -12,13 +12,13 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ slug: string }> }
+  context: { params: Promise<{ companyId: string; slug: string }> }
 ) {
   try {
-    const { slug } = await context.params;
+    const { companyId, slug } = await context.params;
 
-    if (!slug) {
-      return NextResponse.json({ success: false, message: "Slug não informado" }, { status: 400 });
+    if (!companyId || !slug) {
+      return NextResponse.json({ success: false, message: "Empresa ou slug não informados" }, { status: 400 });
     }
 
     const pool = getDbPool();
@@ -31,6 +31,7 @@ export async function GET(
         c.logo_url as company_logo_url,
         c.meta_pixel_id,
         c.meta_pixel_active,
+        (SELECT s.id FROM subscriptions s WHERE s.company_id = c.id AND s.status = 'active' ORDER BY s.id DESC LIMIT 1) as active_sub_id,
         COALESCE(
           (SELECT s.plan_snapshot_max_leads FROM subscriptions s WHERE s.company_id = c.id AND s.status = 'active' ORDER BY s.id DESC LIMIT 1),
           (SELECT p.max_leads FROM subscriptions s JOIN plans p ON p.id = s.plan_id WHERE s.company_id = c.id AND s.status = 'active' ORDER BY s.id DESC LIMIT 1),
@@ -39,9 +40,9 @@ export async function GET(
         (SELECT COUNT(*) FROM company_leads WHERE company_id = c.id) as current_leads_count
       FROM company_group_landing_pages lp
       INNER JOIN companies c ON c.id = lp.company_id
-      WHERE lp.slug = ? AND lp.status = 'active'
+      WHERE (lp.company_id = ? OR c.id = ?) AND lp.slug = ? AND lp.status = 'active'
       LIMIT 1`,
-      [slug]
+      [companyId, companyId, slug]
     );
 
     if (!rows || rows.length === 0) {
@@ -49,6 +50,20 @@ export async function GET(
     }
 
     const page = rows[0];
+
+    // Bloqueia acesso à landing page pública se a empresa não possuir assinatura ativa
+    if (!page.active_sub_id) {
+      return NextResponse.json(
+        {
+          success: false,
+          error_code: "SUBSCRIPTION_INACTIVE",
+          message: "Esta página de convite está temporariamente indisponível.",
+          company_name: page.company_trade_name || page.company_name || "Grupo VIP",
+          logo_url: page.logo_url || null,
+        },
+        { status: 403 }
+      );
+    }
 
     // Verifica cota máxima de leads da empresa antes de entregar a landing page pública
     const maxLeads = Number(page.quota_max_leads || 0);
@@ -81,7 +96,6 @@ export async function GET(
       try {
         const parsed = JSON.parse(page.testimonials);
         if (Array.isArray(parsed)) {
-          // Pode ser array de IDs (strings) ou legado de objetos
           if (parsed.length > 0 && typeof parsed[0] === "string") {
             activeTestimonialIds = parsed;
           }
@@ -93,7 +107,7 @@ export async function GET(
       activeTestimonialIds = page.testimonials;
     }
     
-    // Sempre sorteia 2 depoimentos dinâmicos e humanizados respeitando os IDs ativos da página
+    // Sorteia 2 depoimentos dinâmicos e humanizados respeitando os IDs ativos da página
     const dynamicTestimonials = getRandomTestimonials(2, activeTestimonialIds).map((t) => ({
       name: t.name,
       comment: t.comment,
@@ -104,6 +118,7 @@ export async function GET(
       success: true,
       landing_page: {
         id: page.id,
+        company_id: page.company_id,
         title: page.title,
         headline: page.headline,
         subheadline: page.subheadline,
@@ -129,17 +144,17 @@ export async function GET(
       }
     });
   } catch (error: any) {
-    console.error("Erro ao carregar landing page pública de grupo:", error);
+    console.error("Erro ao carregar landing page pública de grupo por empresa:", error);
     return NextResponse.json({ success: false, message: "Erro interno no servidor" }, { status: 500 });
   }
 }
 
 export async function POST(
   req: NextRequest,
-  context: { params: Promise<{ slug: string }> }
+  context: { params: Promise<{ companyId: string; slug: string }> }
 ) {
   try {
-    const { slug } = await context.params;
+    const { companyId, slug } = await context.params;
     const body = await req.json();
 
     const name = String(body.name || "").trim();
@@ -166,9 +181,9 @@ export async function POST(
               (SELECT COUNT(*) FROM company_leads WHERE company_id = c.id) as current_leads_count
        FROM company_group_landing_pages lp
        INNER JOIN companies c ON c.id = lp.company_id
-       WHERE lp.slug = ?
+       WHERE (lp.company_id = ? OR c.id = ?) AND lp.slug = ?
        LIMIT 1`,
-      [slug]
+      [companyId, companyId, slug]
     );
 
     if (!rows || rows.length === 0) {
@@ -219,7 +234,7 @@ export async function POST(
               event_name: "Lead",
               event_time: Math.floor(Date.now() / 1000),
               event_id: eventId,
-              event_source_url: `${req.nextUrl.origin}/g/${slug}`,
+              event_source_url: `${req.nextUrl.origin}/g/${companyId}/${slug}`,
               action_source: "website",
               user_data: {
                 fn: [hashSha256(name.split(" ")[0])],
@@ -245,9 +260,11 @@ export async function POST(
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-        }).catch((err) => console.error("Erro background CAPI Lead:", err));
+        }).catch((err) => {
+          console.error("Erro no envio assíncrono CAPI Meta Pixel:", err);
+        });
       } catch (capiErr) {
-        console.error("Erro ao preparar evento CAPI Lead:", capiErr);
+        console.error("Falha ao preparar payload CAPI:", capiErr);
       }
     }
 
@@ -255,12 +272,14 @@ export async function POST(
       success: true,
       message: "Lead registrado com sucesso!",
       invite_link: page.invite_link,
-      modal_title: page.modal_title || "Tudo pronto! 🎉",
-      modal_description: page.modal_description || "Seu acesso ao Grupo VIP foi liberado.",
-      modal_button_text: page.modal_button_text || "Acessar Grupo VIP no WhatsApp"
+      modal: {
+        title: page.modal_title || "Tudo pronto! 🎉",
+        description: page.modal_description || "Seu acesso ao Grupo VIP foi liberado.",
+        button_text: page.modal_button_text || "Acessar Grupo VIP no WhatsApp",
+      },
     });
   } catch (error: any) {
-    console.error("Erro ao processar captura de lead da landing page:", error);
-    return NextResponse.json({ success: false, message: "Erro ao registrar inscrição" }, { status: 500 });
+    console.error("Erro ao registrar lead em /api/public/grupos/[companyId]/[slug]:", error);
+    return NextResponse.json({ success: false, message: "Erro interno ao processar cadastro" }, { status: 500 });
   }
 }

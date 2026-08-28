@@ -43,7 +43,12 @@ async function runHealthCheckAutonomous(customIntervalMs) {
 
 async function getActiveQueues() {
   try {
-    const res = await fetch(`${BASE_URL}/api/sa/workers`);
+    const res = await fetch(`${BASE_URL}/api/sa/workers`, {
+      headers: {
+        "x-worker-internal": "daemon",
+      },
+      cache: "no-store",
+    });
     if (res.ok) {
       const data = await res.json();
       const workers = data.workers || [];
@@ -66,7 +71,7 @@ async function getActiveQueues() {
           cachedSubscriptionsIntervalMs = null;
         } else {
           const secs = Number(sw.schedule_interval_seconds) || (Number(sw.schedule_interval_minutes) ? Number(sw.schedule_interval_minutes) * 60 : 60);
-          cachedSubscriptionsIntervalMs = Math.max(60, secs) * 1000;
+          cachedSubscriptionsIntervalMs = Math.max(15, secs) * 1000;
         }
       }
 

@@ -5,7 +5,7 @@
 - Descrição: Gerenciamento de Marketing em Grupos de WhatsApp
 - Usuário inicial super admin do saas: joaohueder@gmail.com
 - Senha do super admin do saas: 123456
-- Versão do sistema: 2026.08.0496
+- Versão do sistema: 2026.08.0588
 
 ## VERSIONAMENTO DO SISTEMA
 - Qualquer alteração no sistema deve mudar a versão do sistema, mantendo o padroão "ano.mes.incremento" exemplo: 2026.08.0001.
@@ -43,7 +43,8 @@
 - Modais de Confirmação Obrigatórios: Todas as ações de exclusão (delete) e mudança de status (ativar, inativar, suspender, expirar, etc.) em qualquer entidade do sistema DEVEM obrigatoriamente exigir confirmação explícita do usuário através de modal dedicado antes de executar a requisição.
 
 ## TESTES E VALIDAÇÕES
-- Sempre teste o que está sendo entregue para que não há erros no sistema.
+- Não entregue nada sem antes testar o código implantado, a funcionalidade do que foi feito e se o sistema está funcional. 
+- Se foi criado ou alterado uma funcionalidade, teste; por exemplo: criado o workers para expirar uma assinatura: teste a funcionalidade com dados ficticios, testando a rotina de ponta a ponta e no final mostre um relatório se deu certo e o que foi testado e aprovado.
 
 ## DASHBOARD E MÉTRICAS & SAÚDE
 - Sempre que houver alguma alteração/criação no projeto, se for interessante colocar no dashboard e nas métricas, coloque.

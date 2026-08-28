@@ -72,8 +72,8 @@ export async function GET(request: Request) {
           COUNT(*) as current_messages_today
         FROM background_jobs
         WHERE queue_name LIKE 'whatsapp-messages%'
-          AND (status = 'completed' OR status = 'active' OR status = 'waiting' OR status = 'delayed')
-          AND DATE(created_at) = CURDATE()
+          AND status IN ('completed', 'active', 'waiting', 'delayed')
+          AND created_at >= CURDATE()
         GROUP BY company_id_val
       ) usage_jobs ON usage_jobs.company_id_val = CAST(c.id AS CHAR)
       LEFT JOIN (
@@ -290,6 +290,24 @@ export async function POST(request: Request) {
       );
     } catch (instError) {
       console.error("Aviso: Erro ao criar instância automática para a empresa:", instError);
+    }
+
+    // Clonar automaticamente os modelos de mensagens ativos do SaaS (Snapshot) para a nova empresa
+    try {
+      const [saTemplates]: any = await pool.query(
+        "SELECT title, content, type FROM sa_message_templates WHERE status = 'active'"
+      );
+
+      if (saTemplates && saTemplates.length > 0) {
+        for (const tmpl of saTemplates) {
+          await pool.query(
+            "INSERT INTO company_message_templates (company_id, title, content, type) VALUES (?, ?, ?, ?)",
+            [companyId, tmpl.title, tmpl.content, tmpl.type || "standard"]
+          );
+        }
+      }
+    } catch (tmplError) {
+      console.error("Aviso: Erro ao clonar modelos padrão de mensagens para a empresa:", tmplError);
     }
 
     const { ip, userAgent } = getClientIpAndAgent(request);

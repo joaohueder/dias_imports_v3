@@ -15,6 +15,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "all";
+    const visibility = searchParams.get("visibility") || "all";
 
     let query = `
       SELECT 
@@ -34,6 +35,12 @@ export async function GET(request: Request) {
     if (status !== "all") {
       query += " AND p.status = ?";
       params.push(status);
+    }
+
+    if (visibility === "public") {
+      query += " AND (p.is_public = 1 OR p.is_public IS NULL)";
+    } else if (visibility === "private") {
+      query += " AND p.is_public = 0";
     }
 
     query += " ORDER BY p.sort_order ASC, p.id ASC";
@@ -73,6 +80,7 @@ export async function POST(request: Request) {
       max_leads,
       max_instances,
       is_featured,
+      is_public,
     } = body;
 
     if (!name || name.trim().length === 0) {
@@ -92,12 +100,13 @@ export async function POST(request: Request) {
     const planStatus = status === "inactive" ? "inactive" : "active";
     const planCycle = billing_cycle || "monthly";
     const planFeatured = !!is_featured;
+    const planPublic = is_public !== undefined ? !!is_public : true;
 
     const [result] = await pool.query<ResultSetHeader>(
       `INSERT INTO plans (
         name, description, price, billing_cycle, status,
-        max_groups, max_products, max_messages_day, max_views, max_leads, max_instances, is_featured
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        max_groups, max_products, max_messages_day, max_views, max_leads, max_instances, is_featured, is_public
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name.trim(),
         description?.trim() || null,
@@ -111,6 +120,7 @@ export async function POST(request: Request) {
         planMaxLeads,
         planMaxInstances,
         planFeatured,
+        planPublic,
       ]
     );
 

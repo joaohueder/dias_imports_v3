@@ -97,8 +97,45 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Se documento informado, valida duplicidade em outra empresa
+    if (!trade_name || trade_name.trim().length === 0) {
+      return NextResponse.json(
+        { success: false, message: "O Nome Fantasia / Marca é obrigatório." },
+        { status: 400 }
+      );
+    }
+
     const cleanDoc = document ? unmask(document) : null;
+    if (!cleanDoc || (cleanDoc.length !== 11 && cleanDoc.length !== 14)) {
+      return NextResponse.json(
+        { success: false, message: "O CPF (11 dígitos) ou CNPJ (14 dígitos) é obrigatório e deve ser válido." },
+        { status: 400 }
+      );
+    }
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      return NextResponse.json(
+        { success: false, message: "O E-mail Corporativo é obrigatório e deve ser válido." },
+        { status: 400 }
+      );
+    }
+
+    const cleanWhatsapp = whatsapp ? unmask(whatsapp) : (phone ? unmask(phone) : null);
+    if (!cleanWhatsapp || cleanWhatsapp.length < 10) {
+      return NextResponse.json(
+        { success: false, message: "O WhatsApp da Empresa é obrigatório." },
+        { status: 400 }
+      );
+    }
+
+    const cleanAdminWhatsapp = admin_whatsapp ? unmask(admin_whatsapp) : null;
+    if (!cleanAdminWhatsapp || cleanAdminWhatsapp.length < 10) {
+      return NextResponse.json(
+        { success: false, message: "O WhatsApp de Login / Administrador é obrigatório." },
+        { status: 400 }
+      );
+    }
+
+    // Se documento informado, valida duplicidade em outra empresa
     if (cleanDoc && cleanDoc.length > 0) {
       const [dup] = await pool.query<RowDataPacket[]>(
         "SELECT id FROM companies WHERE document = ? AND id != ?",
@@ -113,7 +150,6 @@ export async function PUT(request: Request) {
     }
 
     // Se admin_whatsapp informado, valida duplicidade em outra empresa
-    const cleanAdminWhatsapp = admin_whatsapp ? unmask(admin_whatsapp) : null;
     if (cleanAdminWhatsapp && cleanAdminWhatsapp.length > 0) {
       const [dupAdmin] = await pool.query<RowDataPacket[]>(
         "SELECT id FROM companies WHERE admin_whatsapp = ? AND id != ?",
@@ -127,8 +163,7 @@ export async function PUT(request: Request) {
       }
     }
 
-    const cleanPhone = phone ? unmask(phone) : null;
-    const cleanWhatsapp = whatsapp ? unmask(whatsapp) : null;
+    const cleanPhone = cleanWhatsapp;
     const cleanZipcode = address_zipcode ? unmask(address_zipcode) : null;
 
     await pool.query(

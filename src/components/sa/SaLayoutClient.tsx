@@ -28,6 +28,7 @@ import {
   RefreshCw,
   AlertTriangle,
   ListTodo,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import { DatabaseStatusIndicator } from "@/components/auth/DatabaseStatusIndicator";
@@ -82,6 +83,7 @@ const navigationItems: NavigationGroup[] = [
       { name: "Planos", href: "/sa/plans", icon: Layers, badge: null, module: "plans" },
       { name: "Assinaturas", href: "/sa/subscriptions", icon: Zap, badge: null, module: "subscriptions" },
       { name: "Usuários", href: "/sa/users", icon: Users, badge: null, module: "users" },
+      { name: "Modelos de Mensagem", href: "/sa/message-templates", icon: MessageSquare, badge: null, module: "message_templates" },
     ],
   },
   {
@@ -172,7 +174,10 @@ export function SaLayoutClient({ children }: SaLayoutClientProps) {
     };
 
     checkMigrations();
-    const interval = setInterval(checkMigrations, 15000);
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      checkMigrations();
+    }, 30000);
     return () => {
       isMounted = false;
       clearInterval(interval);
@@ -222,7 +227,7 @@ export function SaLayoutClient({ children }: SaLayoutClientProps) {
 
   useEffect(() => {
     fetchUserProfile();
-  }, [pathname]);
+  }, []);
 
   // Verificar se o usuário tem permissão para a rota atual
   const currentModule = getModuleFromPath(pathname);

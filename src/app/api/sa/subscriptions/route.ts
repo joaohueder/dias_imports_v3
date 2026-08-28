@@ -65,8 +65,8 @@ export async function GET(request: Request) {
           COUNT(*) as current_messages_today
         FROM background_jobs
         WHERE queue_name LIKE 'whatsapp-messages%'
-          AND (status = 'completed' OR status = 'active' OR status = 'waiting' OR status = 'delayed')
-          AND DATE(created_at) = CURDATE()
+          AND status IN ('completed', 'active', 'waiting', 'delayed')
+          AND created_at >= CURDATE()
         GROUP BY company_id_val
       ) usage_jobs ON usage_jobs.company_id_val = CAST(s.company_id AS CHAR)
       WHERE 1=1
@@ -141,9 +141,29 @@ export async function POST(request: Request) {
       ? parseFloat(price_at_subscription)
       : parseFloat(plan.price);
 
-    const startDate = current_period_start || new Date().toISOString().slice(0, 19).replace("T", " ");
-    const endDate = current_period_end || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace("T", " ");
     const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+    const startDate = current_period_start || now;
+
+    // Calcula a data final padrão respeitando o ciclo de cobrança do plano (billing_cycle)
+    let defaultEndDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const startJsDate = new Date(startDate.replace(" ", "T"));
+    if (!isNaN(startJsDate.getTime())) {
+      const cycle = plan.billing_cycle || "monthly";
+      const calculatedEnd = new Date(startJsDate);
+      if (cycle === "quarterly") {
+        calculatedEnd.setMonth(calculatedEnd.getMonth() + 3);
+      } else if (cycle === "semiannual") {
+        calculatedEnd.setMonth(calculatedEnd.getMonth() + 6);
+      } else if (cycle === "yearly") {
+        calculatedEnd.setFullYear(calculatedEnd.getFullYear() + 1);
+      } else {
+        // monthly
+        calculatedEnd.setMonth(calculatedEnd.getMonth() + 1);
+      }
+      defaultEndDate = calculatedEnd;
+    }
+
+    const endDate = current_period_end || defaultEndDate.toISOString().slice(0, 19).replace("T", " ");
 
     const connection = await pool.getConnection();
     try {

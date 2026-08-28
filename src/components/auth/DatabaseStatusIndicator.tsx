@@ -53,7 +53,10 @@ export function DatabaseStatusIndicator() {
 
   useEffect(() => {
     checkStatus();
-    const interval = setInterval(checkStatus, 5000);
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      checkStatus();
+    }, 20000);
 
     return () => {
       clearInterval(interval);

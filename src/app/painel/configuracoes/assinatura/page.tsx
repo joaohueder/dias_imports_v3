@@ -22,7 +22,6 @@ import {
   Eye,
   Send,
 } from "lucide-react";
-import { PainelLayoutClient } from "@/components/painel/PainelLayoutClient";
 import { toast } from "sonner";
 
 interface PlanItem {
@@ -138,7 +137,7 @@ function AssinaturaPageContent() {
       case "past_due":
         return (
           <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-amber-500/15 text-amber-400 border border-amber-500/30">
-            Pendente
+            Aguardando Pagamento
           </span>
         );
       case "expired":
@@ -163,8 +162,7 @@ function AssinaturaPageContent() {
   };
 
   return (
-    <PainelLayoutClient user={dashboardData?.user} company={dashboardData?.company}>
-      <div className="space-y-6 animate-in fade-in duration-200">
+    <div className="space-y-6 animate-in fade-in duration-300">
         
         {/* CABEÇALHO PADRONIZADO */}
         <div className="flex flex-col gap-4 pb-4 border-b border-slate-800/80">
@@ -460,7 +458,6 @@ function AssinaturaPageContent() {
           </div>
         )}
       </div>
-    </PainelLayoutClient>
   );
 }
 

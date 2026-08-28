@@ -5,7 +5,6 @@ import {
   Smartphone,
   RefreshCw,
 } from "lucide-react";
-import { PainelLayoutClient } from "@/components/painel/PainelLayoutClient";
 import { WhatsappSettingsTab } from "@/components/painel/WhatsappSettingsTab";
 
 interface DashboardData {
@@ -65,8 +64,7 @@ export default function PainelConfiguracoesWhatsappPage() {
   }
 
   return (
-    <PainelLayoutClient user={data?.user} company={data?.company}>
-      <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300">
         
         {/* CABEÇALHO */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
@@ -91,6 +89,5 @@ export default function PainelConfiguracoesWhatsappPage() {
         {/* CONTEÚDO PRINCIPAL */}
         <WhatsappSettingsTab />
       </div>
-    </PainelLayoutClient>
   );
 }
