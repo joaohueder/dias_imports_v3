@@ -1,7 +1,13 @@
 # Módulo de Produtos & Catálogo (`/painel/produtos`)
 
+**Versão:** 2026.08.0414  
+
 ## Visão Geral
 O módulo de **Produtos & Catálogo** do `/painel` possibilita às empresas cadastradas no SaaS gerenciar seu inventário de produtos, configurar landing pages de alta conversão para vendas diretas e campanhas de envio automático para grupos de WhatsApp.
+
+- **Seletor de Headline de Alta Conversão (`HeadlinePickerModal.tsx`)**:
+  - Catálogo modal com **50 modelos de headlines persuasivas**, divididas em 5 categorias estratégicas (*Urgência & Escassez*, *Desconto & Preço*, *Exclusividade & VIP*, *Garantia & Confiança*, *Chamada Direta & Ação*), com busca em tempo real e inserção com 1 clique.
+  - Utilizada tanto no topo das landing pages quanto na tag `{headline}` dos disparos de WhatsApp.
 
 ---
 

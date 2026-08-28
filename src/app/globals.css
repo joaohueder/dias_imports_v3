@@ -79,3 +79,49 @@ body {
   transform-origin: center;
 }
 
+/* Scrollbar personalizada suave e estilizada para painéis e mockups */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 9999px;
+  transition: background 0.2s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.7);
+}
+
+/* Scrollbar do WhatsApp Mockup */
+.whatsapp-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.whatsapp-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.whatsapp-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+}
+
+.whatsapp-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Suporte Firefox */
+.custom-scrollbar,
+.whatsapp-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+}
+

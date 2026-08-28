@@ -35,6 +35,7 @@ import { EvolutionStatusIndicator } from "@/components/auth/EvolutionStatusIndic
 import { WhatsappDefaultStatusIndicator } from "@/components/auth/WhatsappDefaultStatusIndicator";
 import { RedisStatusIndicator } from "@/components/auth/RedisStatusIndicator";
 import { Pm2StatusIndicator } from "@/components/auth/Pm2StatusIndicator";
+import { ClusterStatusIndicator } from "@/components/painel/ClusterStatusIndicator";
 import { SYSTEM_VERSION } from "@/lib/config";
 import { hasUserPermission, getModuleFromPath } from "@/lib/permissions";
 import { useLayout } from "@/context/LayoutContext";
@@ -350,6 +351,11 @@ export function SaLayoutClient({ children }: SaLayoutClientProps) {
 
           {/* Header Right Actions */}
           <div className="flex items-center gap-3 sm:gap-4">
+            {/* Status do Sistema */}
+            <div className="hidden sm:flex items-center">
+              <ClusterStatusIndicator />
+            </div>
+
             {/* User Profile Menu Dropdown */}
             <div className="relative" ref={userMenuRef}>
               <button

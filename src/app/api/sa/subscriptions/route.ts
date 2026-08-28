@@ -26,11 +26,49 @@ export async function GET(request: Request) {
         COALESCE(s.plan_snapshot_max_groups, p.max_groups) as max_groups,
         COALESCE(s.plan_snapshot_max_products, p.max_products) as max_products,
         COALESCE(s.plan_snapshot_max_messages_day, p.max_messages_day) as max_messages_day,
+        COALESCE(s.plan_snapshot_max_views, p.max_views, 0) as max_views,
+        COALESCE(s.plan_snapshot_max_leads, p.max_leads, 0) as max_leads,
         COALESCE(s.plan_snapshot_max_instances, p.max_instances) as max_instances,
-        COALESCE(s.plan_snapshot_billing_cycle, p.billing_cycle) as billing_cycle
+        COALESCE(s.plan_snapshot_billing_cycle, p.billing_cycle) as billing_cycle,
+        COALESCE(usage_groups.current_groups_count, 0) as current_groups_count,
+        COALESCE(usage_products.current_products_count, 0) as current_products_count,
+        COALESCE(usage_products.current_views_count, 0) as current_views_count,
+        COALESCE(usage_leads.current_leads_count, 0) as current_leads_count,
+        COALESCE(usage_instances.current_instances_count, 0) as current_instances_count,
+        COALESCE(usage_jobs.current_messages_today, 0) as current_messages_today
       FROM subscriptions s
       JOIN companies c ON s.company_id = c.id
       LEFT JOIN plans p ON s.plan_id = p.id
+      LEFT JOIN (
+        SELECT company_id, COUNT(*) as current_groups_count
+        FROM company_whatsapp_groups
+        GROUP BY company_id
+      ) usage_groups ON usage_groups.company_id = s.company_id
+      LEFT JOIN (
+        SELECT company_id, COUNT(*) as current_products_count, COALESCE(SUM(views_count), 0) as current_views_count
+        FROM company_products
+        GROUP BY company_id
+      ) usage_products ON usage_products.company_id = s.company_id
+      LEFT JOIN (
+        SELECT company_id, COUNT(*) as current_leads_count
+        FROM company_leads
+        GROUP BY company_id
+      ) usage_leads ON usage_leads.company_id = s.company_id
+      LEFT JOIN (
+        SELECT company_id, COUNT(*) as current_instances_count
+        FROM instances
+        GROUP BY company_id
+      ) usage_instances ON usage_instances.company_id = s.company_id
+      LEFT JOIN (
+        SELECT 
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.company_id')), JSON_UNQUOTE(JSON_EXTRACT(payload, '$.companyId'))) as company_id_val,
+          COUNT(*) as current_messages_today
+        FROM background_jobs
+        WHERE queue_name LIKE 'whatsapp-messages%'
+          AND (status = 'completed' OR status = 'active' OR status = 'waiting' OR status = 'delayed')
+          AND DATE(created_at) = CURDATE()
+        GROUP BY company_id_val
+      ) usage_jobs ON usage_jobs.company_id_val = CAST(s.company_id AS CHAR)
       WHERE 1=1
     `;
     const params: (string | number)[] = [];
@@ -125,11 +163,11 @@ export async function POST(request: Request) {
         `INSERT INTO subscriptions (
           company_id, plan_id,
           plan_snapshot_name, plan_snapshot_max_groups, plan_snapshot_max_products,
-          plan_snapshot_max_messages_day, plan_snapshot_max_instances,
+          plan_snapshot_max_messages_day, plan_snapshot_max_views, plan_snapshot_max_leads, plan_snapshot_max_instances,
           plan_snapshot_billing_cycle, plan_snapshot_features,
           status, current_period_start, current_period_end,
           payment_method, price_at_subscription
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           company_id,
           plan_id,
@@ -137,6 +175,8 @@ export async function POST(request: Request) {
           plan.max_groups,
           plan.max_products,
           plan.max_messages_day,
+          plan.max_views || 0,
+          plan.max_leads || 0,
           plan.max_instances || 1,
           plan.billing_cycle || "monthly",
           plan.features ? JSON.stringify(plan.features) : null,

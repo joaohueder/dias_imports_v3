@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -26,15 +26,17 @@ import {
   RotateCw,
   Eye,
   Loader2,
+  Smartphone,
+  MessageSquareQuote,
+  Radio,
+  Crown,
+  History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SYSTEM_VERSION, SYSTEM_NAME } from "@/lib/config";
 import { useLayout } from "@/context/LayoutContext";
 import { CompanyWhatsappStatusIndicator } from "./CompanyWhatsappStatusIndicator";
-import { DatabaseStatusIndicator } from "@/components/auth/DatabaseStatusIndicator";
-import { EvolutionStatusIndicator } from "@/components/auth/EvolutionStatusIndicator";
-import { RedisStatusIndicator } from "@/components/auth/RedisStatusIndicator";
-import { Pm2StatusIndicator } from "@/components/auth/Pm2StatusIndicator";
+import { ClusterStatusIndicator } from "./ClusterStatusIndicator";
 
 interface PainelLayoutClientProps {
   children: React.ReactNode;
@@ -81,16 +83,21 @@ const navigationItems: NavigationGroup[] = [
     category: "Marketing & Grupos",
     icon: Users2,
     items: [
-      { name: "Grupos WhatsApp", href: "/painel/grupos", icon: Users2, badge: "Base Local", module: "grupos" },
+      { name: "Grupos WhatsApp", href: "/painel/grupos", icon: Users2, badge: null, module: "grupos" },
+      { name: "Landing Page Grupo", href: "/painel/grupos/landing-page", icon: Sparkles, badge: null, module: "landing-page-grupo" },
       { name: "Produtos & Ofertas", href: "/painel/produtos", icon: Package, badge: null, module: "produtos" },
-      { name: "Gestão de Leads", href: "/painel/leads", icon: UserCheck, badge: "Em Breve", module: "leads" },
+      { name: "Gestão de Leads", href: "/painel/leads", icon: UserCheck, badge: null, module: "leads" },
     ],
   },
   {
     category: "Configurações",
     icon: Settings,
     items: [
-      { name: "WhatsApp & Empresa", href: "/painel/configuracoes", icon: Settings, badge: null, module: "configuracoes" },
+      { name: "WhatsApp & Conexão", href: "/painel/configuracoes/whatsapp", icon: Smartphone, badge: null, module: "whatsapp" },
+      { name: "Dados da Empresa", href: "/painel/configuracoes/empresa", icon: Building2, badge: null, module: "empresa" },
+      { name: "Modelos de Mensagens", href: "/painel/configuracoes/modelos", icon: MessageSquareQuote, badge: null, module: "modelos" },
+      { name: "Meta Ads & Pixel", href: "/painel/configuracoes/meta-ads", icon: Radio, badge: null, module: "meta-ads" },
+      { name: "Planos & Assinatura", href: "/painel/configuracoes/assinatura", icon: Crown, badge: null, module: "assinatura" },
     ],
   },
 ];
@@ -126,11 +133,32 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
     name: string;
     plan: string;
     status: string;
+    subscription_end?: string | null;
+    admin_whatsapp?: string | null;
   }>({
     id: initialCompany?.id || 1,
     name: initialCompany?.name || "JH7 Marketing",
     plan: initialCompany?.plan || "Pro",
     status: initialCompany?.status || "active",
+    subscription_end: null,
+    admin_whatsapp: null,
+  });
+
+  const [quotas, setQuotas] = useState<{
+    groups: { current: number; limit: number };
+    products: { current: number; limit: number };
+    messages_day: { current: number; limit: number };
+    views: { current: number; limit: number };
+    leads?: { current: number; limit: number };
+  } | null>(null);
+
+  const [limitsExceededInfo, setLimitsExceededInfo] = useState<{
+    exceeded: boolean;
+    exceededItems: { key: string; label: string; current: number; max: number }[];
+    plan_name?: string;
+  }>({
+    exceeded: false,
+    exceededItems: [],
   });
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -164,17 +192,37 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
                 name: json.company.name || "JH7 Marketing",
                 plan: json.company.plan || "Pro",
                 status: json.company.status || "active",
+                subscription_end: json.company.subscription_end || null,
+                admin_whatsapp: json.company.admin_whatsapp || null,
               });
+            }
+            if (json.quotas) {
+              setQuotas(json.quotas);
             }
           }
         }
       } catch {
         // Fallback silencioso
       }
+
+      // Checa status de limite excedido
+      try {
+        const limRes = await fetch("/api/painel/limits-status", { cache: "no-store" });
+        if (limRes.ok) {
+          const limJson = await limRes.json();
+          if (limJson.success) {
+            setLimitsExceededInfo({
+              exceeded: !!limJson.exceeded,
+              exceededItems: limJson.exceededItems || [],
+              plan_name: limJson.plan_name,
+            });
+          }
+        }
+      } catch {
+        // Fallback silencioso
+      }
     }
-    if (!initialUser || !initialCompany) {
-      loadData();
-    }
+    loadData();
   }, [initialUser, initialCompany, pathname]);
 
   const [isImpersonating, setIsImpersonating] = useState(false);
@@ -189,7 +237,20 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
     if (href === "/painel") {
       return pathname === "/painel";
     }
-    return pathname === href || pathname.startsWith(`${href}/`);
+    if (pathname === href) {
+      return true;
+    }
+    // Se existir outro item no menu que seja mais específico (comum em sub-rotas como /painel/grupos/landing-page),
+    // apenas dê match de prefixo se não houver um link exato correspondente
+    const hasMoreSpecificItem = navigationItems
+      .flatMap((g) => g.items)
+      .some((item) => item.href !== href && item.href.startsWith(href) && (pathname === item.href || pathname.startsWith(`${item.href}/`)));
+
+    if (hasMoreSpecificItem) {
+      return false;
+    }
+
+    return pathname.startsWith(`${href}/`);
   };
 
   // Abrir o submenu da rota atual
@@ -270,13 +331,58 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
   const companyName = companyData.name;
   const companyPlan = companyData.plan;
 
+  // Função auxiliar para calcular estilos de alerta dinâmico de limites (0-50% verde, 51-90% amarelo, >90% vermelho piscando)
+  const getQuotaStatusClass = (current: number, limit: number) => {
+    if (!limit || limit <= 0) {
+      return "text-emerald-400 font-semibold";
+    }
+    const percent = (current / limit) * 100;
+    if (percent > 90) {
+      return "text-rose-400 font-bold animate-pulse drop-shadow-[0_0_8px_rgba(244,63,94,0.6)]";
+    }
+    if (percent > 50) {
+      return "text-amber-400 font-semibold";
+    }
+    return "text-emerald-400 font-semibold";
+  };
+
+  // Formatação amigável da data final da assinatura
+  const formattedSubscriptionEnd = useMemo(() => {
+    if (!companyData.subscription_end) return null;
+    try {
+      const date = new Date(companyData.subscription_end);
+      if (isNaN(date.getTime())) return null;
+      return new Intl.DateTimeFormat("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(date);
+    } catch {
+      return null;
+    }
+  }, [companyData.subscription_end]);
+
+  // Formatação amigável do WhatsApp Admin
+  const formattedAdminWhatsapp = useMemo(() => {
+    const wa = companyData.admin_whatsapp;
+    if (!wa) return null;
+    const clean = wa.replace(/\D/g, "");
+    if (clean.length === 11) {
+      return `(${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7)}`;
+    }
+    if (clean.length === 10) {
+      return `(${clean.slice(0, 2)}) ${clean.slice(2, 6)}-${clean.slice(6)}`;
+    }
+    return wa;
+  }, [companyData.admin_whatsapp]);
+
   return (
     <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col items-center font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
       
       {/* BARRA SUPERIOR DE IMPERSONAÇÃO */}
       {isImpersonating && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 px-4 py-1.5 text-xs font-bold border-b border-amber-300 flex items-center justify-between shadow-md">
-          <div className="max-w-7xl mx-auto w-full flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div className="fixed top-0 left-0 right-0 z-50 h-8 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 px-4 text-xs font-bold border-b border-amber-300 flex items-center justify-between shadow-md">
+          <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="p-1 rounded bg-slate-950/20 text-slate-950">
                 <Eye className="w-3.5 h-3.5 animate-pulse" />
@@ -301,10 +407,49 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
         </div>
       )}
 
+      {/* TARJA VERMELHA FIXA NO TOPO - LIMITE DA ASSINATURA ATINGIDO */}
+      {limitsExceededInfo.exceeded && (
+        <div
+          className={`fixed left-0 right-0 z-50 bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white shadow-xl shadow-red-950/60 border-b border-red-400/30 transition-all ${
+            isImpersonating ? "top-8" : "top-0"
+          }`}
+        >
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4 text-center sm:text-left min-h-[44px]">
+            <div className="flex items-center gap-2.5">
+              <span className="p-1 rounded-lg bg-black/25 text-white shrink-0 animate-bounce">
+                <AlertTriangle className="w-4 h-4 text-amber-300" />
+              </span>
+              <div className="text-xs sm:text-sm font-semibold text-white/95 leading-tight">
+                <strong className="text-amber-200 font-extrabold uppercase tracking-wide">Atenção:</strong>{" "}
+                <span>
+                  Você atingiu o limite do seu plano ({limitsExceededInfo.exceededItems.map((i) => i.label).join(", ")}). Desbloqueie todo o potencial para não perder novas conversões e vendas!
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-center">
+              <Link
+                href="/painel/configuracoes/assinatura?tab=upgrade"
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1 rounded-lg bg-white text-rose-700 hover:bg-amber-100 hover:text-rose-800 transition-all font-black text-xs shadow-md shadow-black/20 hover:scale-105 active:scale-95 whitespace-nowrap cursor-pointer"
+              >
+                <Crown className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                <span>Fazer Upgrade Agora</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 1. HEADER FIXO COM CONTAINER LARGURA MÁXIMA */}
       <header
-        className={`fixed left-0 right-0 z-40 h-16 bg-[#090f1d]/90 backdrop-blur-xl border-b border-slate-800/80 flex justify-center shadow-lg shadow-black/40 ${
-          isImpersonating ? "top-8" : "top-0"
+        className={`fixed left-0 right-0 z-40 h-16 bg-[#090f1d]/90 backdrop-blur-xl border-b border-slate-800/80 flex justify-center shadow-lg shadow-black/40 transition-all ${
+          limitsExceededInfo.exceeded
+            ? isImpersonating
+              ? "top-[76px]"
+              : "top-[44px]"
+            : isImpersonating
+            ? "top-8"
+            : "top-0"
         }`}
       >
         <div
@@ -345,16 +490,11 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
                 </span>
               </div>
               <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <span className="font-black tracking-tight text-base bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent truncate max-w-[150px] sm:max-w-xs">
-                    {companyName}
-                  </span>
-                  <span className="hidden sm:inline-flex items-center gap-1 text-[9px] uppercase font-extrabold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
-                    {companyPlan}
-                  </span>
-                </div>
+                <span className="font-black tracking-tight text-base bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent truncate max-w-[150px] sm:max-w-xs">
+                  {companyName}
+                </span>
                 <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
-                  {SYSTEM_NAME} &bull; Portal do Cliente
+                  Portal do Cliente
                 </span>
               </div>
             </Link>
@@ -362,6 +502,10 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
 
           {/* Header Right Actions */}
           <div className="flex items-center gap-3 sm:gap-4">
+            {/* Status do Sistema (Cluster) */}
+            <div className="hidden sm:flex items-center">
+              <ClusterStatusIndicator />
+            </div>
             
             {/* Status do WhatsApp da Empresa */}
             <div className="hidden sm:flex items-center">
@@ -389,7 +533,9 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
                   <span className="text-xs font-semibold text-slate-200 group-hover:text-white transition-colors truncate max-w-[130px]">
                     {userName}
                   </span>
-                  <span className="text-[10px] text-slate-400 truncate max-w-[130px]">{userEmail || "Operador"}</span>
+                  <span className="text-[10px] text-slate-400 font-mono truncate max-w-[130px]" title="Data final da assinatura">
+                    {formattedSubscriptionEnd ? `Validade: ${formattedSubscriptionEnd}` : "Sem expiração"}
+                  </span>
                 </div>
 
                 <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500/25 to-teal-500/25 border border-emerald-500/40 flex items-center justify-center text-emerald-300 font-bold text-xs shadow-inner group-hover:scale-105 transition-transform">
@@ -414,23 +560,31 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
                         {userData.role === "SUPER_ADMIN" ? "SUPER ADMIN" : userData.role === "COMPANY_ADMIN" ? "ADMIN" : "OPERADOR"}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-400 truncate mt-0.5">{userEmail || "sem-email@empresa.com"}</p>
+                    <div className="flex items-center gap-1.5 mt-1 text-[11px] text-emerald-400 font-mono font-medium">
+                      <Smartphone className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{formattedAdminWhatsapp || "Sem WhatsApp Admin"}</span>
+                    </div>
                   </div>
 
                   {/* Actions */}
                   <div className="p-1.5 space-y-0.5">
-                    <button
-                      onClick={handleRefreshPermissions}
-                      disabled={isRefreshingPerms}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors disabled:opacity-60 text-left cursor-pointer"
+                    <Link
+                      href="/painel/configuracoes/assinatura?tab=upgrade"
+                      onClick={() => setUserDropdownOpen(false)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-amber-300 hover:text-amber-200 hover:bg-amber-500/10 transition-colors"
                     >
-                      <RotateCw
-                        className={`w-4 h-4 text-emerald-400 ${
-                          isRefreshingPerms ? "animate-spin" : ""
-                        }`}
-                      />
-                      <span>{isRefreshingPerms ? "Recarregando..." : "Recarregar Permissões"}</span>
-                    </button>
+                      <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>Fazer Upgrade de Plano</span>
+                    </Link>
+
+                    <Link
+                      href="/painel/configuracoes/assinatura?tab=historico"
+                      onClick={() => setUserDropdownOpen(false)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors"
+                    >
+                      <History className="w-4 h-4 text-teal-400 shrink-0" />
+                      <span>Histórico de Assinatura</span>
+                    </Link>
 
                     {userData.role === "SUPER_ADMIN" && (
                       <Link
@@ -438,7 +592,7 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
                         onClick={() => setUserDropdownOpen(false)}
                         className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-indigo-300 hover:text-indigo-200 hover:bg-indigo-500/10 transition-colors"
                       >
-                        <Sliders className="w-4 h-4 text-indigo-400" />
+                        <Sliders className="w-4 h-4 text-indigo-400 shrink-0" />
                         <span>Painel Super Admin SaaS</span>
                       </Link>
                     )}
@@ -466,7 +620,13 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
       {/* 2. CORPO (BARRA DE MENU LATERAL + MAIN) CENTRALIZADO NA LARGURA (1200px) */}
       <div
         className={`w-full flex-1 flex justify-center pb-12 min-h-screen ${
-          isImpersonating ? "pt-24" : "pt-16"
+          limitsExceededInfo.exceeded
+            ? isImpersonating
+              ? "pt-[140px]"
+              : "pt-[108px]"
+            : isImpersonating
+            ? "pt-24"
+            : "pt-16"
         }`}
       >
         <div
@@ -476,7 +636,13 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
           {/* SIDEBAR DESKTOP */}
           <aside
             className={`hidden md:flex flex-col sticky self-start shrink-0 bg-[#080d1a] border-r border-slate-800/80 transition-all duration-300 z-30 ${
-              isImpersonating ? "top-24 h-[calc(100vh-6rem)]" : "top-16 h-[calc(100vh-4rem)]"
+              limitsExceededInfo.exceeded
+                ? isImpersonating
+                  ? "top-[140px] h-[calc(100vh-140px)]"
+                  : "top-[108px] h-[calc(100vh-108px)]"
+                : isImpersonating
+                ? "top-24 h-[calc(100vh-6rem)]"
+                : "top-16 h-[calc(100vh-4rem)]"
             } ${sidebarCollapsed ? "w-20" : "w-72"}`}
           >
             {/* Menu Items */}
@@ -757,26 +923,81 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
       </div>
 
       {/* 4. FOOTER FIXO COM CONTAINER LARGURA MÁXIMA */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 h-12 bg-[#090f1d]/90 backdrop-blur-xl border-t border-slate-800/80 flex justify-center text-xs text-slate-400 shadow-inner">
+      <footer className="fixed bottom-0 left-0 right-0 z-40 h-12 bg-[#090f1d]/95 backdrop-blur-xl border-t border-slate-800/80 flex justify-center text-xs text-slate-400 shadow-inner">
         <div
           className="w-full h-full px-4 sm:px-6 flex items-center justify-between transition-all duration-300 bg-[#080d1a] border-x border-slate-800/40"
           style={containerMaxWidthStyle}
         >
-          <div className="flex items-center gap-3 truncate">
+          {/* Lado Esquerdo: Empresa e Plano */}
+          <div className="flex items-center gap-2.5 truncate">
             <span className="flex items-center gap-1.5 font-semibold text-slate-300">
               <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-              {companyName}
+              <span className="truncate max-w-[120px] sm:max-w-none">{companyName}</span>
             </span>
-            <span className="text-slate-600 hidden sm:inline">&bull;</span>
-            <span className="text-slate-400 hidden sm:inline">Marketing & Grupos WhatsApp</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+              Plano {companyPlan}
+            </span>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-            <DatabaseStatusIndicator />
-            <RedisStatusIndicator />
-            <Pm2StatusIndicator />
-            <EvolutionStatusIndicator />
+          {/* Centro: Limites da Assinatura */}
+          {quotas && (
+            <div className="hidden md:flex items-center gap-3 lg:gap-4 text-[11px]">
+              <div className="flex items-center gap-1.5" title="Limite de Grupos WhatsApp">
+                <Users2 className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="text-slate-400">Grupos:</span>
+                <span className={getQuotaStatusClass(quotas.groups.current, quotas.groups.limit)}>
+                  {quotas.groups.current} / {quotas.groups.limit > 0 ? quotas.groups.limit : "∞"}
+                </span>
+              </div>
 
+              <span className="text-slate-700">&bull;</span>
+
+              <div className="flex items-center gap-1.5" title="Limite de Produtos no Catálogo">
+                <Package className="w-3.5 h-3.5 text-pink-400" />
+                <span className="text-slate-400">Produtos:</span>
+                <span className={getQuotaStatusClass(quotas.products.current, quotas.products.limit)}>
+                  {quotas.products.current} / {quotas.products.limit > 0 ? quotas.products.limit : "∞"}
+                </span>
+              </div>
+
+              <span className="text-slate-700">&bull;</span>
+
+              <div className="flex items-center gap-1.5" title="Limite de Visualizações das Landing Pages">
+                <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-slate-400">Views:</span>
+                <span className={getQuotaStatusClass(quotas.views.current, quotas.views.limit)}>
+                  {quotas.views.current} / {quotas.views.limit > 0 ? quotas.views.limit : "∞"}
+                </span>
+              </div>
+
+              {quotas.leads && (
+                <>
+                  <span className="text-slate-700">&bull;</span>
+
+                  <div className="flex items-center gap-1.5" title="Total de Leads Capturados vs Limite da Assinatura">
+                    <UserCheck className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="text-slate-400">Leads:</span>
+                    <span className={getQuotaStatusClass(quotas.leads.current, quotas.leads.limit)}>
+                      {quotas.leads.current} / {quotas.leads.limit > 0 ? quotas.leads.limit : "∞"}
+                    </span>
+                  </div>
+                </>
+              )}
+
+              <span className="text-slate-700">&bull;</span>
+
+              <div className="flex items-center gap-1.5" title="Disparos realizados hoje vs Limite Diário de WhatsApp">
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-slate-400">Disparos/dia:</span>
+                <span className={getQuotaStatusClass(quotas.messages_day.current, quotas.messages_day.limit)}>
+                  {quotas.messages_day.current} / {quotas.messages_day.limit > 0 ? quotas.messages_day.limit : "∞"}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Lado Direito: Versão */}
+          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
             <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-[11px] font-mono text-emerald-300">
               <Zap className="w-3 h-3 text-amber-400" />
               v{SYSTEM_VERSION}

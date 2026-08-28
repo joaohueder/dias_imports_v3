@@ -41,6 +41,7 @@ import {
   XCircle,
   ExternalLink,
   Send,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
@@ -61,6 +62,8 @@ interface Subscription {
   max_groups: number;
   max_products: number;
   max_messages_day: number;
+  max_views?: number;
+  max_leads?: number;
   max_instances: number;
   billing_cycle: string;
   price_at_subscription: number | string;
@@ -78,6 +81,8 @@ interface PlanOption {
   max_groups: number;
   max_products: number;
   max_messages_day: number;
+  max_views?: number;
+  max_leads?: number;
   billing_cycle: string;
 }
 
@@ -110,12 +115,12 @@ const SUBSCRIPTION_STATUS_MAP: Record<string, { label: string; bg: string; text:
   expired: { label: "Expirado", bg: "bg-rose-500/10", text: "text-rose-400", border: "border-rose-500/20" },
 };
 
-function CompanyFormContent() {
+function CompanyFormContent({ companyIdProp }: { companyIdProp?: string }) {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
   const { showError, showSuccess } = useFeedbackModal();
-  const companyId = params?.id as string | undefined;
+  const companyId = companyIdProp || (params?.id as string | undefined);
   const isEditing = Boolean(companyId && companyId !== "new");
 
   const [isLoadingData, setIsLoadingData] = useState(isEditing);
@@ -578,6 +583,8 @@ function CompanyFormContent() {
       if (editingLimitType === "groups") payload.max_groups = numVal;
       if (editingLimitType === "products") payload.max_products = numVal;
       if (editingLimitType === "messages") payload.max_messages_day = numVal;
+      if (editingLimitType === "views") payload.max_views = numVal;
+      if (editingLimitType === "leads") payload.max_leads = numVal;
 
       const res = await fetch(`/api/sa/subscriptions/${activeSubscription.id}/limits`, {
         method: "PATCH",
@@ -1656,6 +1663,114 @@ function CompanyFormContent() {
                           </button>
                         )}
                       </div>
+
+                      {/* Limite de Visualizações */}
+                      <div className="p-3 rounded-xl bg-slate-950/50 border border-slate-800/60 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Eye className="w-4 h-4 text-cyan-400 shrink-0" />
+                          <div className="min-w-0">
+                            <span className="text-slate-400 block text-[11px]">Limite de Views</span>
+                            {editingLimitType === "views" ? (
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={limitInputValue}
+                                  onChange={(e) => setLimitInputValue(e.target.value)}
+                                  className="w-24 px-2 py-0.5 rounded bg-slate-900 border border-cyan-500/50 text-white font-bold text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                                  autoFocus
+                                />
+                                <button
+                                  type="button"
+                                  disabled={isSavingLimit}
+                                  onClick={handleSaveLimit}
+                                  className="p-1 rounded bg-cyan-600 hover:bg-cyan-500 text-white transition-colors"
+                                  title="Salvar"
+                                >
+                                  {isSavingLimit ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isSavingLimit}
+                                  onClick={handleCancelEditLimit}
+                                  className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors"
+                                  title="Cancelar"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="font-bold text-white block truncate">
+                                {Number(activeSubscription.max_views) === 0 ? "Ilimitado" : `${Number(activeSubscription.max_views).toLocaleString("pt-BR")} views`}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {editingLimitType !== "views" && can("subscriptions", "edit") && (
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditLimit("views", activeSubscription.max_views ?? 0)}
+                            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-cyan-600/30 text-slate-400 hover:text-cyan-300 border border-slate-700/60 transition-all shrink-0"
+                            title="Alterar limite de views"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Limite de Leads */}
+                      <div className="p-3 rounded-xl bg-slate-950/50 border border-slate-800/60 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Users className="w-4 h-4 text-amber-400 shrink-0" />
+                          <div className="min-w-0">
+                            <span className="text-slate-400 block text-[11px]">Limite de Leads</span>
+                            {editingLimitType === "leads" ? (
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={limitInputValue}
+                                  onChange={(e) => setLimitInputValue(e.target.value)}
+                                  className="w-24 px-2 py-0.5 rounded bg-slate-900 border border-amber-500/50 text-white font-bold text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                  autoFocus
+                                />
+                                <button
+                                  type="button"
+                                  disabled={isSavingLimit}
+                                  onClick={handleSaveLimit}
+                                  className="p-1 rounded bg-amber-600 hover:bg-amber-500 text-white transition-colors disabled:opacity-50"
+                                  title="Salvar"
+                                >
+                                  {isSavingLimit ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isSavingLimit}
+                                  onClick={handleCancelEditLimit}
+                                  className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors"
+                                  title="Cancelar"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="font-bold text-white block truncate">
+                                {Number(activeSubscription.max_leads) === 0 ? "Ilimitado" : `${Number(activeSubscription.max_leads).toLocaleString("pt-BR")} leads`}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {editingLimitType !== "leads" && can("subscriptions", "edit") && (
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditLimit("leads", activeSubscription.max_leads ?? 0)}
+                            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-amber-600/30 text-slate-400 hover:text-amber-300 border border-slate-700/60 transition-all shrink-0"
+                            title="Alterar limite de leads"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400 pt-4 mt-4 border-t border-slate-800/60">
@@ -2620,7 +2735,7 @@ function CompanyFormContent() {
   );
 }
 
-export default function CompanyFormPage() {
+export default function CompanyFormPage({ companyIdProp }: { companyIdProp?: string }) {
   return (
     <Suspense
       fallback={
@@ -2630,7 +2745,7 @@ export default function CompanyFormPage() {
         </div>
       }
     >
-      <CompanyFormContent />
+      <CompanyFormContent companyIdProp={companyIdProp} />
     </Suspense>
   );
 }

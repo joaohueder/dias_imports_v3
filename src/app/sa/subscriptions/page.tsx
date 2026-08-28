@@ -18,6 +18,12 @@ import {
   Clock3,
   Flame,
   ArrowRight,
+  Users,
+  Package,
+  MessageSquare,
+  Eye,
+  UserCheck,
+  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
@@ -36,7 +42,15 @@ interface Subscription {
   max_groups: number;
   max_products: number;
   max_messages_day: number;
+  max_views?: number;
+  max_leads?: number;
   max_instances: number;
+  current_groups_count?: number;
+  current_products_count?: number;
+  current_views_count?: number;
+  current_leads_count?: number;
+  current_instances_count?: number;
+  current_messages_today?: number;
   status: "active" | "past_due" | "canceled" | "expired";
   current_period_start: string;
   current_period_end: string;
@@ -53,6 +67,14 @@ export default function SubscriptionsPage() {
   const [statusFilter, setStatusFilter] = useState("active");
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
+
+  const hasActiveFilters = searchTerm.trim().length > 0 || statusFilter !== "active";
+
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("active");
+    setCurrentPage(1);
+  };
 
   const fetchSubscriptions = useCallback(async () => {
     try {
@@ -203,6 +225,18 @@ export default function SubscriptionsPage() {
               <option value="expired" className="bg-slate-900 text-slate-200">Expiradas</option>
             </select>
           </div>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-semibold transition-all whitespace-nowrap active:scale-95 cursor-pointer shrink-0"
+              title="Limpar todos os filtros"
+            >
+              <XCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span>Limpar Filtros</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -235,22 +269,32 @@ export default function SubscriptionsPage() {
             </div>
             <p className="text-sm font-semibold text-slate-300">Nenhuma assinatura encontrada</p>
             <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-              {statusFilter === "active"
-                ? "Não há nenhuma assinatura ativa no momento ou o termo de busca não retornou dados."
-                : "Nenhum contrato encontrado para os filtros selecionados."}
+              {hasActiveFilters
+                ? "Nenhuma assinatura corresponde aos filtros de busca aplicados."
+                : "Não há nenhuma assinatura cadastrada no momento."}
             </p>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all cursor-pointer shadow-md"
+              >
+                <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                <span>Limpar Filtros</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-[#0b1222] border-b border-slate-800/90 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
                 <tr>
-                  <th className="px-5 py-3.5 w-[28%]">Empresa / Tenant</th>
-                  <th className="px-5 py-3.5 w-[24%]">Plano & Cotas</th>
-                  <th className="px-5 py-3.5 w-[14%]">Valor</th>
+                  <th className="px-5 py-3.5 w-[32%]">Empresa / Tenant</th>
+                  <th className="px-5 py-3.5 w-[22%]">Plano</th>
+                  <th className="px-5 py-3.5 w-[16%]">Valor</th>
                   <th className="px-5 py-3.5 w-[12%]">Status</th>
-                  <th className="px-5 py-3.5 w-[14%]">Vigência</th>
-                  <th className="px-5 py-3.5 w-[8%] text-right">Ação</th>
+                  <th className="px-5 py-3.5 w-[12%]">Vigência</th>
+                  <th className="px-5 py-3.5 w-[6%] text-right">Ação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -261,122 +305,158 @@ export default function SubscriptionsPage() {
                   const isEndingSoon = sub.status === "active" && daysRemaining <= 7 && daysRemaining >= 0;
 
                   return (
-                    <tr key={sub.id} className="hover:bg-slate-900/40 transition-colors group">
-                      {/* Empresa */}
-                      <td className="px-5 py-4 align-middle">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-bold text-sm shrink-0">
-                            {sub.company_name?.slice(0, 2).toUpperCase() || "EP"}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="font-bold text-white text-sm leading-snug group-hover:text-indigo-300 transition-colors truncate">
-                              {sub.company_trade_name || sub.company_name}
+                    <React.Fragment key={sub.id}>
+                      <tr className="hover:bg-slate-900/40 transition-colors group">
+                        {/* Empresa */}
+                        <td className="px-5 py-4 align-middle">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-bold text-sm shrink-0">
+                              {sub.company_name?.slice(0, 2).toUpperCase() || "EP"}
                             </div>
-                            {sub.company_trade_name && (
-                              <div className="text-[11px] text-slate-400 truncate">
-                                {sub.company_name}
+                            <div className="min-w-0">
+                              <div className="font-bold text-white text-sm leading-snug group-hover:text-indigo-300 transition-colors truncate">
+                                {sub.company_trade_name || sub.company_name}
                               </div>
-                            )}
-                            {sub.company_document && (
-                              <div className="text-[11px] font-mono text-slate-400 mt-0.5">
-                                {formatDocumentWithLabel(sub.company_document)}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Plano & Cotas */}
-                      <td className="px-5 py-4 align-middle">
-                        <div className="space-y-1.5">
-                          <div className="font-bold text-indigo-300 text-sm flex items-center gap-2">
-                            <span>{sub.plan_name}</span>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-800/90 text-[10px] text-slate-300 border border-slate-700/60 font-medium">
-                              Grupos: <strong className="text-white ml-1">{sub.max_groups === 0 ? "∞" : sub.max_groups}</strong>
-                            </span>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-800/90 text-[10px] text-slate-300 border border-slate-700/60 font-medium">
-                              Produtos: <strong className="text-white ml-1">{sub.max_products === 0 ? "∞" : sub.max_products}</strong>
-                            </span>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-800/90 text-[10px] text-slate-300 border border-slate-700/60 font-medium">
-                              Envios: <strong className="text-white ml-1">{sub.max_messages_day?.toLocaleString("pt-BR")}/dia</strong>
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Valor & Método */}
-                      <td className="px-5 py-4 align-middle">
-                        <div className="font-black text-white text-sm tracking-tight">
-                          {formatCurrencyBRL(sub.price_at_subscription)}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mt-0.5">
-                          {sub.payment_method || "PIX"}
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-5 py-4 align-middle">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap shadow-sm ${statusConfig.bg} ${statusConfig.text} ${statusConfig.border}`}
-                        >
-                          <StatusIcon className="w-3 h-3" />
-                          {statusConfig.label}
-                        </span>
-                      </td>
-
-                      {/* Período / Vigência */}
-                      <td className="px-5 py-4 align-middle">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1.5 text-slate-300 whitespace-nowrap">
-                            <Calendar className="w-3 h-3 text-indigo-400 shrink-0" />
-                            <span className="text-[11px] text-slate-400">Início:</span>
-                            <span className="text-[11px] text-white font-semibold">{formatDate(sub.current_period_start)}</span>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 whitespace-nowrap">
-                            <Clock className={`w-3 h-3 shrink-0 ${isEndingSoon ? "text-amber-400" : "text-slate-400"}`} />
-                            <span className="text-[11px] text-slate-400">
-                              {sub.status === "active" ? "Término:" : "Encerrou:"}
-                            </span>
-                            <span className={`text-[11px] font-semibold ${isEndingSoon ? "text-amber-300" : "text-white"}`}>
-                              {formatDate(sub.current_period_end)}
-                            </span>
-                          </div>
-
-                          {/* Badge de dias restantes / vencimento */}
-                          {sub.status === "active" && (
-                            <div className="pt-0.5">
-                              {daysRemaining < 0 ? (
-                                <span className="inline-block text-[10px] font-semibold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
-                                  Vencida há {Math.abs(daysRemaining)} dia(s)
-                                </span>
-                              ) : daysRemaining === 0 ? (
-                                <span className="inline-block text-[10px] font-semibold text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                                  Vence hoje
-                                </span>
-                              ) : (
-                                <span className={`inline-block text-[10px] font-medium ${isEndingSoon ? "text-amber-300" : "text-slate-400"}`}>
-                                  {daysRemaining} dia(s) restante(s)
-                                </span>
+                              {sub.company_trade_name && (
+                                <div className="text-[11px] text-slate-400 truncate">
+                                  {sub.company_name}
+                                </div>
+                              )}
+                              {sub.company_document && (
+                                <div className="text-[11px] font-mono text-slate-400 mt-0.5">
+                                  {formatDocumentWithLabel(sub.company_document)}
+                                </div>
                               )}
                             </div>
-                          )}
-                        </div>
-                      </td>
+                          </div>
+                        </td>
 
-                      {/* Ação */}
-                      <td className="px-5 py-4 align-middle text-right">
-                        <Link
-                          href={`/sa/companies/${sub.company_id}?tab=subscription`}
-                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800/90 hover:bg-indigo-600 text-slate-300 hover:text-white border border-slate-700/60 hover:border-indigo-500 transition-all shadow-sm active:scale-95"
-                          title="Gerenciar Assinatura"
-                        >
-                          <ArrowRight className="w-4 h-4" />
-                        </Link>
-                      </td>
-                    </tr>
+                        {/* Plano */}
+                        <td className="px-5 py-4 align-middle">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 font-semibold text-xs">
+                            <Layers className="w-3.5 h-3.5 shrink-0" />
+                            <span>{sub.plan_name}</span>
+                          </span>
+                        </td>
+
+                        {/* Valor & Método */}
+                        <td className="px-5 py-4 align-middle">
+                          <div className="font-black text-white text-sm tracking-tight">
+                            {formatCurrencyBRL(sub.price_at_subscription)}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mt-0.5">
+                            {sub.payment_method || "PIX"}
+                          </div>
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-5 py-4 align-middle">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap shadow-sm ${statusConfig.bg} ${statusConfig.text} ${statusConfig.border}`}
+                          >
+                            <StatusIcon className="w-3 h-3" />
+                            {statusConfig.label}
+                          </span>
+                        </td>
+
+                        {/* Período / Vigência */}
+                        <td className="px-5 py-4 align-middle">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 text-slate-300 whitespace-nowrap">
+                              <Calendar className="w-3 h-3 text-indigo-400 shrink-0" />
+                              <span className="text-[11px] text-slate-400">Início:</span>
+                              <span className="text-[11px] text-white font-semibold">{formatDate(sub.current_period_start)}</span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 whitespace-nowrap">
+                              <Clock className={`w-3 h-3 shrink-0 ${isEndingSoon ? "text-amber-400" : "text-slate-400"}`} />
+                              <span className="text-[11px] text-slate-400">
+                                {sub.status === "active" ? "Término:" : "Encerrou:"}
+                              </span>
+                              <span className={`text-[11px] font-semibold ${isEndingSoon ? "text-amber-300" : "text-white"}`}>
+                                {formatDate(sub.current_period_end)}
+                              </span>
+                            </div>
+
+                            {/* Badge de dias restantes / vencimento */}
+                            {sub.status === "active" && (
+                              <div className="pt-0.5">
+                                {daysRemaining < 0 ? (
+                                  <span className="inline-block text-[10px] font-semibold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
+                                    Vencida há {Math.abs(daysRemaining)} dia(s)
+                                  </span>
+                                ) : daysRemaining === 0 ? (
+                                  <span className="inline-block text-[10px] font-semibold text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                    Vence hoje
+                                  </span>
+                                ) : (
+                                  <span className={`inline-block text-[10px] font-medium ${isEndingSoon ? "text-amber-300" : "text-slate-400"}`}>
+                                    {daysRemaining} dia(s) restante(s)
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Ação */}
+                        <td className="px-5 py-4 align-middle text-right">
+                          <Link
+                            href={`/sa/companies/${sub.company_id}?tab=subscription`}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800/90 hover:bg-indigo-600 text-slate-300 hover:text-white border border-slate-700/60 hover:border-indigo-500 transition-all shadow-sm active:scale-95"
+                            title="Gerenciar Assinatura"
+                          >
+                            <ArrowRight className="w-4 h-4" />
+                          </Link>
+                        </td>
+                      </tr>
+
+                      {/* Linha Dedicada: Limites da Assinatura no Formato Linha Contendo Uso/Limite */}
+                      <tr className="bg-[#080d1a]/70 border-b border-slate-800/80">
+                        <td colSpan={6} className="px-5 py-2.5">
+                          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-300">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 mr-1">
+                              Limites:
+                            </span>
+
+                            <div className="flex items-center gap-1.5 whitespace-nowrap" title={`Grupos de WhatsApp: ${sub.current_groups_count ?? 0} utilizados de ${sub.max_groups === 0 ? "Ilimitado" : sub.max_groups}`}>
+                              <Users className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                              <span>
+                                Grupos: <strong className="text-white font-semibold">{sub.current_groups_count ?? 0}</strong>/{sub.max_groups === 0 ? "∞" : sub.max_groups}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 whitespace-nowrap" title={`Produtos no Catálogo: ${sub.current_products_count ?? 0} cadastrados de ${sub.max_products === 0 ? "Ilimitado" : sub.max_products}`}>
+                              <Package className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                              <span>
+                                Produtos: <strong className="text-white font-semibold">{sub.current_products_count ?? 0}</strong>/{sub.max_products === 0 ? "∞" : sub.max_products}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 whitespace-nowrap" title={`Disparos Hoje: ${sub.current_messages_today ?? 0} enviados de ${(sub.max_messages_day ?? 0) === 0 ? "Ilimitado" : (sub.max_messages_day ?? 0).toLocaleString("pt-BR")}`}>
+                              <MessageSquare className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span>
+                                Envios/dia: <strong className="text-white font-semibold">{sub.current_messages_today ?? 0}</strong>/{(sub.max_messages_day ?? 0) === 0 ? "∞" : (sub.max_messages_day ?? 0).toLocaleString("pt-BR")}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 whitespace-nowrap" title={`Visualizações de Catálogo: ${(sub.current_views_count ?? 0).toLocaleString("pt-BR")} visualizações de ${(sub.max_views ?? 0) === 0 ? "Ilimitado" : (sub.max_views ?? 0).toLocaleString("pt-BR")}`}>
+                              <Eye className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                              <span>
+                                Visualizações: <strong className="text-white font-semibold">{(sub.current_views_count ?? 0).toLocaleString("pt-BR")}</strong>/{(sub.max_views ?? 0) === 0 ? "∞" : (sub.max_views ?? 0).toLocaleString("pt-BR")}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 whitespace-nowrap" title={`Leads Capturados: ${(sub.current_leads_count ?? 0).toLocaleString("pt-BR")} leads de ${(sub.max_leads ?? 0) === 0 ? "Ilimitado" : (sub.max_leads ?? 0).toLocaleString("pt-BR")}`}>
+                              <UserCheck className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                              <span>
+                                Leads: <strong className="text-white font-semibold">{(sub.current_leads_count ?? 0).toLocaleString("pt-BR")}</strong>/{(sub.max_leads ?? 0) === 0 ? "∞" : (sub.max_leads ?? 0).toLocaleString("pt-BR")}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </React.Fragment>
                   );
                 })}
               </tbody>

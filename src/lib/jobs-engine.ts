@@ -1,5 +1,6 @@
 import { getDbPool } from "@/lib/db";
 import { sendEvolutionText } from "@/lib/evolution";
+import { isPm2DaemonRunning } from "@/lib/pm2";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
 
 export interface QueueRecord {
@@ -55,7 +56,7 @@ export function calculateRandomDelayMs(minSeconds: number, maxSeconds: number): 
 }
 
 /**
- * Garante e sincroniza a espera por instância antes de executar a ação na Evolution API
+ * Garante e sincroniza a espera por instância ou empresa antes de executar a ação na Evolution API
  */
 export async function scheduleInstanceDelay(
   instanceKey: string,
@@ -280,7 +281,7 @@ export async function processGroupSyncJob(job: JobRecord): Promise<{ success: bo
       return { success: true, updatedCount: 0 };
     }
 
-    // 2. Obter instância ativa
+    // 2. Obter instância da empresa
     const instanceId = payload.instance_id || savedGroups[0].instance_id;
     let instance: RowDataPacket | undefined;
 
@@ -294,22 +295,20 @@ export async function processGroupSyncJob(job: JobRecord): Promise<{ success: bo
 
     if (!instance) {
       const [instances] = await pool.query<RowDataPacket[]>(
-        `SELECT * FROM instances WHERE company_id = ? AND status = 'connected' ORDER BY is_default DESC, id DESC LIMIT 1`,
+        `SELECT * FROM instances WHERE company_id = ? ORDER BY is_default DESC, id DESC LIMIT 1`,
         [companyId]
       );
       instance = instances[0];
     }
 
-    if (!instance) {
-      const [allInstances] = await pool.query<RowDataPacket[]>(
-        `SELECT * FROM instances WHERE company_id = ? ORDER BY is_default DESC, id DESC LIMIT 1`,
-        [companyId]
-      );
-      instance = allInstances[0];
+    if (!instance || !instance.name) {
+      const err = "Nenhuma instância do WhatsApp vinculada a esta empresa foi encontrada";
+      await failJob(job.id, err, Date.now() - start, job.queue_name);
+      return { success: false, error: err };
     }
 
-    if (!instance || !instance.name) {
-      const err = "Nenhuma instância do WhatsApp encontrada para sincronizar grupos";
+    if (instance.status !== "connected" && instance.status !== "open") {
+      const err = `A instância [${instance.name}] da empresa está desconectada (status: ${instance.status}). Operação cancelada.`;
       await failJob(job.id, err, Date.now() - start, job.queue_name);
       return { success: false, error: err };
     }
@@ -319,15 +318,18 @@ export async function processGroupSyncJob(job: JobRecord): Promise<{ success: bo
 
     let evoMap = new Map<string, any>();
 
-    // Aplica a política anti-ban (jitter e delay) configurada no worker para esta fila
+    // Aplica política anti-ban com delay randômico isolado por empresa/instância (sem bloquear outras empresas)
     const workerConfig = await getWorkerConfigByQueue(job.queue_name);
     const minDelay = workerConfig?.min_delay_seconds ?? 5;
     const maxDelay = workerConfig?.max_delay_seconds ?? 15;
     const batchSize = workerConfig?.batch_size ?? 10;
     const batchPause = workerConfig?.batch_pause_seconds ?? 30;
 
+    // Chave isolada por empresa e instância: cada empresa tem seu próprio pipeline temporal de delay
+    const companyInstanceKey = `company_${companyId}_instance_${instance.name}`;
+
     const { waitedMs } = await scheduleInstanceDelay(
-      instance.name,
+      companyInstanceKey,
       minDelay,
       maxDelay,
       batchSize,
@@ -347,8 +349,10 @@ export async function processGroupSyncJob(job: JobRecord): Promise<{ success: bo
         });
         if (singleRes.ok) {
           const singleData = await singleRes.json();
-          if (singleData && (singleData.id || singleData.jid || singleData.subject)) {
-            evoMap.set(singleJid, singleData);
+          // A Evolution API v2.3.7 pode retornar o objeto de grupo diretamente ou envelopado em "response"
+          const groupData = singleData?.response || singleData;
+          if (groupData && (groupData.id || groupData.jid || groupData.subject)) {
+            evoMap.set(singleJid, groupData);
             foundSingle = true;
           }
         }
@@ -365,6 +369,21 @@ export async function processGroupSyncJob(job: JobRecord): Promise<{ success: bo
       });
 
       if (!evoRes.ok) {
+        // Se a Evolution falhar mas o grupo existir localmente, evita quebrar a fila inteira
+        const group = savedGroups[0];
+        if (group && group.name) {
+          console.warn(`[Jobs Engine] Evolution retornou HTTP ${evoRes.status}. Usando dados locais para evitar quebra.`);
+          await pool.query<ResultSetHeader>(
+            `UPDATE company_whatsapp_groups
+             SET status = 'active', updated_at = NOW()
+             WHERE id = ?`,
+            [group.id]
+          );
+          const duration = Date.now() - start;
+          await completeJob(job.id, duration, job.queue_name);
+          return { success: true, updatedCount: 1 };
+        }
+
         const errMsg = `Erro HTTP ${evoRes.status} retornado pela Evolution API ao buscar grupos`;
         await failJob(job.id, errMsg, Date.now() - start, job.queue_name);
         return { success: false, error: errMsg };
@@ -441,30 +460,73 @@ export async function processGroupSyncJob(job: JobRecord): Promise<{ success: bo
 export async function processWhatsAppJob(job: JobRecord): Promise<{ success: boolean; error?: string; delayMs?: number }> {
   const start = Date.now();
   const payload = job.payload || {};
+  const pool = getDbPool();
+  const companyId = payload.company_id || payload.companyId;
   
-  // Resolve nome da instância (se não especificado ou default, busca a padrão is_default = 1 no banco)
+  // Resolve instância vinculada à empresa ou especificada no payload
+  let instance: RowDataPacket | undefined;
+  const instanceId = payload.instance_id || payload.instanceId;
   let instanceName = (payload.instanceName as string) || (payload.instance_name as string);
-  if (!instanceName || instanceName === "default") {
-    try {
-      const pool = getDbPool();
-      const [rows] = await pool.query<RowDataPacket[]>(
-        "SELECT name, instance_key FROM instances WHERE is_default = TRUE LIMIT 1"
-      );
-      if (rows.length > 0) {
-        instanceName = rows[0].name || rows[0].instance_key;
-      } else {
-        instanceName = "matriz-saas";
-      }
-    } catch {
-      instanceName = "matriz-saas";
-    }
+
+  if (instanceId && companyId) {
+    const [instRows] = await pool.query<RowDataPacket[]>(
+      `SELECT * FROM instances WHERE id = ? AND company_id = ? LIMIT 1`,
+      [instanceId, companyId]
+    );
+    instance = instRows[0];
+  } else if (instanceId) {
+    const [instRows] = await pool.query<RowDataPacket[]>(
+      `SELECT * FROM instances WHERE id = ? LIMIT 1`,
+      [instanceId]
+    );
+    instance = instRows[0];
+  } else if (instanceName && instanceName !== "default" && companyId) {
+    const [instRows] = await pool.query<RowDataPacket[]>(
+      `SELECT * FROM instances WHERE name = ? AND company_id = ? LIMIT 1`,
+      [instanceName, companyId]
+    );
+    instance = instRows[0];
+  } else if (instanceName && instanceName !== "default") {
+    const [instRows] = await pool.query<RowDataPacket[]>(
+      `SELECT * FROM instances WHERE name = ? LIMIT 1`,
+      [instanceName]
+    );
+    instance = instRows[0];
+  } else if (companyId) {
+    const [instRows] = await pool.query<RowDataPacket[]>(
+      `SELECT * FROM instances WHERE company_id = ? ORDER BY is_default DESC, id DESC LIMIT 1`,
+      [companyId]
+    );
+    instance = instRows[0];
+  } else {
+    const [instRows] = await pool.query<RowDataPacket[]>(
+      `SELECT * FROM instances WHERE is_default = TRUE LIMIT 1`
+    );
+    instance = instRows[0];
   }
+
+  if (!instance || !instance.name) {
+    const err = "Nenhuma instância do WhatsApp vinculada para esta operação foi encontrada.";
+    await failJob(job.id, err, Date.now() - start, job.queue_name);
+    return { success: false, error: err };
+  }
+
+  // Se a instância da empresa estiver desconectada, falha o job imediatamente sem utilizar outra instância
+  if (instance.status !== "connected" && instance.status !== "open") {
+    const err = `A instância [${instance.name}] da empresa está desconectada (status: ${instance.status}). Disparo cancelado.`;
+    await failJob(job.id, err, Date.now() - start, job.queue_name);
+    return { success: false, error: err };
+  }
+
+  instanceName = instance.name;
 
   const number = (payload.number as string) || (payload.phone as string) || (payload.recipient as string);
   const text = (payload.text as string) || (payload.message as string);
+  const mediaUrl = (payload.mediaUrl as string) || (payload.media_url as string) || (payload.image_url as string);
+  const fileName = (payload.fileName as string) || (payload.file_name as string);
 
-  if (!number || !text) {
-    const err = "Payload do job inválido: número ou mensagem ausente";
+  if (!number || (!text && !mediaUrl)) {
+    const err = "Payload do job inválido: número ou mensagem/mídia ausente";
     await failJob(job.id, err, Date.now() - start, job.queue_name);
     return { success: false, error: err };
   }
@@ -485,16 +547,51 @@ export async function processWhatsAppJob(job: JobRecord): Promise<{ success: boo
   );
 
   try {
-    const result = await sendEvolutionText(instanceName, number, text);
+    let result: { ok: boolean; status: number; data: unknown };
+    
+    if (mediaUrl) {
+      let resolvedMedia = mediaUrl;
+      // Se a mediaUrl for localhost e estivermos no worker, converte para Base64 lendo do disco public
+      if ((resolvedMedia.startsWith("http://localhost") || resolvedMedia.startsWith("http://127.0.0.1") || resolvedMedia.startsWith("/uploads/")) && !resolvedMedia.startsWith("data:")) {
+        try {
+          const { readFile } = await import("fs/promises");
+          const path = await import("path");
+          let subPath = resolvedMedia;
+          if (subPath.startsWith("http")) {
+            subPath = new URL(subPath).pathname;
+          }
+          const diskPath = path.join(process.cwd(), "public", subPath);
+          const fileBuf = await readFile(diskPath);
+          const ext = path.extname(diskPath).toLowerCase().replace(".", "") || "jpeg";
+          const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+          resolvedMedia = `data:${mime};base64,${fileBuf.toString("base64")}`;
+        } catch (e) {
+          console.warn("[Jobs-Engine] Não foi possível converter mídia local para Base64:", e);
+        }
+      }
+
+      const { sendEvolutionMedia } = await import("@/lib/evolution");
+      result = await sendEvolutionMedia(instanceName, number, resolvedMedia, text || "", fileName);
+    } else {
+      result = await sendEvolutionText(instanceName, number, text || "");
+    }
 
     if (result.ok) {
       const duration = Date.now() - start;
       await completeJob(job.id, duration, job.queue_name);
       return { success: true, delayMs: waitedMs };
     } else {
-      const errMsg = typeof result.data === "object" && result.data !== null && "error" in result.data
-        ? String((result.data as { error: unknown }).error)
-        : `Erro HTTP ${result.status} retornado pela Evolution API`;
+      let errMsg = `Erro HTTP ${result.status} retornado pela Evolution API`;
+      if (typeof result.data === "object" && result.data !== null) {
+        const obj = result.data as any;
+        if (obj.response?.message) {
+          errMsg = Array.isArray(obj.response.message) ? obj.response.message.join(", ") : String(obj.response.message);
+        } else if (obj.message) {
+          errMsg = Array.isArray(obj.message) ? obj.message.join(", ") : String(obj.message);
+        } else if (obj.error) {
+          errMsg = String(obj.error);
+        }
+      }
 
       await failJob(job.id, errMsg, Date.now() - start, job.queue_name);
       return { success: false, error: errMsg, delayMs: waitedMs };
@@ -507,23 +604,400 @@ export async function processWhatsAppJob(job: JobRecord): Promise<{ success: boo
 }
 
 /**
+ * Processa a rotina de verificação de integridade e telemetria do sistema (health-check)
+ */
+export async function processHealthMonitorJob(job: JobRecord): Promise<{ success: boolean; error?: string; health?: Record<string, unknown> }> {
+  const start = Date.now();
+  const pool = getDbPool();
+
+  try {
+    let dbStatus = "online";
+    let dbLatencyMs = 0;
+    try {
+      const t0 = Date.now();
+      await pool.query("SELECT 1");
+      dbLatencyMs = Date.now() - t0;
+    } catch {
+      dbStatus = "offline";
+    }
+
+    let redisStatus = "online";
+    let redisLatencyMs = 0;
+    try {
+      const host = process.env.REDIS_HOST || "127.0.0.1";
+      const port = Number(process.env.REDIS_PORT) || 6379;
+      const password = process.env.REDIS_PASSWORD || "";
+      const net = await import("net");
+
+      const probeRedis = () => {
+        const t0 = Date.now();
+        return new Promise<number>((resolve, reject) => {
+          const s = net.createConnection(port, host);
+          s.setTimeout(2500);
+          s.setNoDelay(true);
+          s.on("connect", () => {
+            if (password) {
+              s.write(`AUTH ${password}\r\n`);
+            } else {
+              s.write("PING\r\n");
+            }
+          });
+          s.on("data", (data) => {
+            const resStr = data.toString();
+            if (resStr.includes("+OK")) {
+              s.write("PING\r\n");
+            } else if (resStr.includes("+PONG")) {
+              const latency = Date.now() - t0;
+              s.end();
+              resolve(latency);
+            } else if (resStr.includes("-ERR") || resStr.includes("-NOAUTH")) {
+              s.end();
+              reject(new Error(resStr.trim()));
+            }
+          });
+          s.on("error", (e) => {
+            s.destroy();
+            reject(e);
+          });
+          s.on("timeout", () => {
+            s.destroy();
+            reject(new Error("Timeout"));
+          });
+        });
+      };
+
+      try {
+        redisLatencyMs = await probeRedis();
+      } catch {
+        await new Promise((r) => setTimeout(r, 100));
+        redisLatencyMs = await probeRedis();
+      }
+    } catch {
+      redisStatus = "offline";
+    }
+
+    let pm2Status = "online";
+    try {
+      const isPm2Active = await isPm2DaemonRunning();
+      pm2Status = isPm2Active ? "online" : "offline";
+    } catch {
+      pm2Status = "offline";
+    }
+
+    let evolutionStatus = "online";
+    let whatsappStatus = "disconnected";
+    let whatsappPhone: string | null = null;
+    let whatsappProfile: string | null = null;
+
+    try {
+      const { getEvolutionConfig } = await import("@/lib/evolution");
+      const { url, apiKey } = getEvolutionConfig();
+      const evoRes = await fetch(`${url}/instance/fetchInstances`, {
+        headers: { apikey: apiKey },
+        signal: AbortSignal.timeout(4000),
+      });
+
+      let evoInstances: any[] = [];
+      if (evoRes.ok) {
+        evolutionStatus = "online";
+        evoInstances = await evoRes.json().catch(() => []);
+      } else {
+        evolutionStatus = "degraded";
+      }
+
+      // Busca qual instância é a padrão no banco de dados
+      const [instRows] = await pool.query<RowDataPacket[]>(
+        "SELECT id, name, status, phone_connected, profile_name FROM instances WHERE is_default = TRUE LIMIT 1"
+      );
+
+      if (instRows.length > 0) {
+        const defaultInst = instRows[0];
+        const evoMatch = Array.isArray(evoInstances)
+          ? evoInstances.find((ei) => (ei.name || "").toLowerCase() === (defaultInst.name || "").toLowerCase())
+          : null;
+
+        if (evoMatch) {
+          const isOpen = evoMatch.connectionStatus === "open";
+          whatsappStatus = isOpen ? "connected" : (evoMatch.connectionStatus === "connecting" ? "connecting" : "disconnected");
+          const jidPhone = (evoMatch.ownerJid || "").split("@")[0] || null;
+          whatsappPhone = isOpen ? (jidPhone || defaultInst.phone_connected || null) : null;
+          whatsappProfile = isOpen ? (evoMatch.profileName || defaultInst.profile_name || null) : null;
+
+          // Sincroniza o status real de volta na tabela instances
+          try {
+            await pool.query(
+              `UPDATE instances 
+               SET status = ?, 
+                   phone_connected = ?, 
+                   profile_name = ?, 
+                   updated_at = NOW() 
+               WHERE id = ?`,
+              [whatsappStatus, whatsappPhone, whatsappProfile, defaultInst.id]
+            );
+          } catch {
+            // Ignora erro se DB estiver em falha transitória
+          }
+        } else {
+          whatsappStatus = defaultInst.status === "connected" ? "connected" : "disconnected";
+          whatsappPhone = defaultInst.phone_connected || null;
+          whatsappProfile = defaultInst.profile_name || null;
+        }
+      }
+    } catch {
+      evolutionStatus = "offline";
+    }
+
+    const os = await import("os");
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
+    const uptime = os.uptime();
+
+    // Se o banco estiver offline, todos os serviços dependentes ficam comprometidos
+    if (dbStatus === "offline") {
+      redisStatus = "offline";
+      pm2Status = "offline";
+      evolutionStatus = "offline";
+      whatsappStatus = "disconnected";
+    }
+
+    // O status da infraestrutura é saudável se DB, Redis e Evolution API estão online (WhatsApp desconectado não invalida a saúde da infra)
+    const overallStatus = dbStatus === "online" && redisStatus === "online" && evolutionStatus === "online" 
+      ? (pm2Status === "online" ? "healthy" : "degraded") 
+      : (dbStatus === "offline" ? "offline" : "degraded");
+
+    // 1. Salva em arquivo local (resiliente mesmo se o MySQL cair)
+    try {
+      const { writeHealthSnapshotToFile } = await import("@/lib/health-snapshot");
+      writeHealthSnapshotToFile({
+        id: 1,
+        status: overallStatus,
+        db_status: dbStatus,
+        db_latency_ms: dbLatencyMs,
+        redis_status: redisStatus,
+        redis_latency_ms: redisLatencyMs,
+        pm2_status: pm2Status,
+        evolution_status: evolutionStatus,
+        whatsapp_status: whatsappStatus as "connected" | "disconnected" | "connecting",
+        whatsapp_phone: whatsappPhone,
+        whatsapp_profile: whatsappProfile,
+        system_cpu_usage: "0.1%",
+        system_total_mem_mb: Math.round(totalMem / 1024 / 1024),
+        system_used_mem_mb: Math.round(usedMem / 1024 / 1024),
+        system_uptime_seconds: uptime,
+        updated_at: new Date().toISOString(),
+      });
+    } catch {
+      // Ignora falha de gravação no arquivo
+    }
+
+    // 2. Salva ou atualiza o snapshot consolidado no banco de dados se disponível
+    try {
+      await pool.query(
+        `INSERT INTO system_health_snapshots (
+          id, status, db_status, db_latency_ms, redis_status, redis_latency_ms,
+          pm2_status, evolution_status, whatsapp_status, whatsapp_phone,
+          whatsapp_profile, system_cpu_usage, system_total_mem_mb,
+          system_used_mem_mb, system_uptime_seconds, raw_payload, updated_at
+        ) VALUES (
+          1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW()
+        ) ON DUPLICATE KEY UPDATE
+          status = VALUES(status),
+          db_status = VALUES(db_status),
+          db_latency_ms = VALUES(db_latency_ms),
+          redis_status = VALUES(redis_status),
+          redis_latency_ms = VALUES(redis_latency_ms),
+          pm2_status = VALUES(pm2_status),
+          evolution_status = VALUES(evolution_status),
+          whatsapp_status = VALUES(whatsapp_status),
+          whatsapp_phone = VALUES(whatsapp_phone),
+          whatsapp_profile = VALUES(whatsapp_profile),
+          system_cpu_usage = VALUES(system_cpu_usage),
+          system_total_mem_mb = VALUES(system_total_mem_mb),
+          system_used_mem_mb = VALUES(system_used_mem_mb),
+          system_uptime_seconds = VALUES(system_uptime_seconds),
+          raw_payload = VALUES(raw_payload),
+          updated_at = NOW()`,
+        [
+          overallStatus,
+          dbStatus,
+          dbLatencyMs,
+          redisStatus,
+          redisLatencyMs,
+          pm2Status,
+          evolutionStatus,
+          whatsappStatus,
+          whatsappPhone,
+          whatsappProfile,
+          "0.1%",
+          Math.round(totalMem / 1024 / 1024),
+          Math.round(usedMem / 1024 / 1024),
+          uptime,
+          JSON.stringify({ checkedAt: new Date().toISOString() }),
+        ]
+      );
+    } catch {
+      // Falha ao gravar no banco se o banco estiver offline
+    }
+
+    const duration = Date.now() - start;
+    try {
+      await completeJob(job.id, duration, job.queue_name);
+    } catch {
+      // Ignora erro de finalização de job se o banco estiver offline
+    }
+    return { success: true, health: { status: overallStatus, dbStatus, redisStatus, evolutionStatus, whatsappStatus } };
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : "Erro ao executar health monitor";
+    try {
+      await failJob(job.id, errMsg, Date.now() - start, job.queue_name);
+    } catch {
+      // Ignora erro de marcação de falha se o banco estiver offline
+    }
+    return { success: false, error: errMsg };
+  }
+}
+
+/**
+ * Processa a consolidação analítica e agregação de métricas do sistema
+ */
+export async function processAnalyticsAggregationJob(job: JobRecord): Promise<{ success: boolean; error?: string; metrics?: Record<string, unknown> }> {
+  const start = Date.now();
+  const pool = getDbPool();
+
+  try {
+    // 1. Consolida estatísticas globais e por tenant
+    const [productMetrics] = await pool.query<RowDataPacket[]>(
+      `SELECT 
+         COUNT(*) as total_products,
+         COALESCE(SUM(views_count), 0) as total_views,
+         COALESCE(SUM(clicks_count), 0) as total_clicks,
+         COALESCE(SUM(sends_count), 0) as total_sends
+       FROM company_products`
+    );
+
+    const [leadMetrics] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) as total_leads FROM company_leads`
+    );
+
+    const [groupMetrics] = await pool.query<RowDataPacket[]>(
+      `SELECT 
+         COUNT(*) as total_groups,
+         COALESCE(SUM(participants_count), 0) as total_participants
+       FROM company_whatsapp_groups`
+    );
+
+    const metrics = {
+      products: productMetrics[0] || {},
+      leads: leadMetrics[0] || {},
+      groups: groupMetrics[0] || {},
+      aggregated_at: new Date().toISOString(),
+    };
+
+    const duration = Date.now() - start;
+    await completeJob(job.id, duration, job.queue_name);
+    return { success: true, metrics };
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : "Erro desconhecido ao agregar analíticos";
+    await failJob(job.id, errMsg, Date.now() - start, job.queue_name);
+    return { success: false, error: errMsg };
+  }
+}
+
+/**
+ * Processa a rotina diária de verificação de assinaturas e expirações (cron-subscriptions)
+ */
+export async function processCronSubscriptionsJob(job: JobRecord): Promise<{ success: boolean; error?: string; updatedCount?: number }> {
+  const start = Date.now();
+  const pool = getDbPool();
+
+  try {
+    // 1. Marca como past_due ou expired assinaturas ativas com vencimento anterior a hoje
+    const [result] = await pool.query<ResultSetHeader>(
+      `UPDATE subscriptions
+       SET status = 'past_due', updated_at = NOW()
+       WHERE status = 'active'
+         AND current_period_end IS NOT NULL
+         AND current_period_end < CURDATE()`
+    );
+
+    const duration = Date.now() - start;
+    await completeJob(job.id, duration, job.queue_name);
+    return { success: true, updatedCount: result.affectedRows };
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : "Erro desconhecido na rotina de assinaturas";
+    await failJob(job.id, errMsg, Date.now() - start, job.queue_name);
+    return { success: false, error: errMsg };
+  }
+}
+
+/**
+ * Processa a limpeza e retenção de jobs concluídos mais antigos que 7 dias
+ */
+export async function processHousekeepingJob(job: JobRecord): Promise<{ success: boolean; error?: string; deletedCount?: number }> {
+  const start = Date.now();
+  const pool = getDbPool();
+
+  try {
+    // Remove jobs concluídos criados há mais de 7 dias
+    const [result] = await pool.query<ResultSetHeader>(
+      `DELETE FROM background_jobs
+       WHERE status = 'completed'
+         AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)`
+    );
+
+    const duration = Date.now() - start;
+    await completeJob(job.id, duration, job.queue_name);
+    return { success: true, deletedCount: result.affectedRows };
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : "Erro desconhecido na limpeza de jobs";
+    await failJob(job.id, errMsg, Date.now() - start, job.queue_name);
+    return { success: false, error: errMsg };
+  }
+}
+
+/**
  * Processa um lote de jobs pendentes de todas as filas ativas (ou de uma fila específica)
  */
 export async function processActiveQueues(
   targetQueue?: string,
-  limitPerQueue: number = 5
+  limitPerQueue: number = 5,
+  skipPm2Check: boolean = true
 ): Promise<{ processedCount: number; results: Array<{ jobId: string; name: string; result: any }> }> {
+  // Apenas executa se o PM2 estiver ativo e rodando (exceto se explicitamente ignorado)
+  if (!skipPm2Check) {
+    const isPm2Active = await isPm2DaemonRunning();
+    if (!isPm2Active) {
+      return { processedCount: 0, results: [] };
+    }
+  }
+
   const pool = getDbPool();
   
   let queueList: string[] = [];
   if (targetQueue && targetQueue !== "all") {
     queueList = [targetQueue];
   } else {
-    // Busca filas ativas que não estejam pausadas
-    const [queues] = await pool.query<RowDataPacket[]>(
-      "SELECT name FROM queues WHERE is_paused = 0 ORDER BY id ASC"
-    );
-    queueList = queues.map((q) => q.name);
+    // Busca filas ativas dos workers cadastrados ou da tabela queues
+    try {
+      const [workers] = await pool.query<RowDataPacket[]>(
+        "SELECT DISTINCT queue_name FROM workers WHERE status IN ('active', 'idle')"
+      );
+      queueList = workers.map((w) => w.queue_name);
+    } catch {
+      // Fallback para queues
+    }
+
+    if (queueList.length === 0) {
+      try {
+        const [queues] = await pool.query<RowDataPacket[]>(
+          "SELECT name FROM queues WHERE is_paused = 0 ORDER BY id ASC"
+        );
+        queueList = queues.map((q) => q.name);
+      } catch {
+        queueList = ["system-health-monitor", "whatsapp-groups-sync", "whatsapp-messages-default", "cron-subscriptions"];
+      }
+    }
   }
 
   const results: Array<{ jobId: string; name: string; result: any }> = [];
@@ -539,12 +1013,36 @@ export async function processActiveQueues(
     const batchLimit = Math.min(limitPerQueue, concurrency);
 
     for (let i = 0; i < batchLimit; i++) {
-      const job = await dequeueJob(qName);
+      let job = await dequeueJob(qName);
+      
+      // Se for a fila de saúde e não houver job em espera, cria um job sob demanda imediatamente
+      if (!job && qName === "system-health-monitor") {
+        job = await enqueueJob("system-health-monitor", "health_check", { trigger: "scheduled_or_daemon" });
+        job = await dequeueJob(qName);
+      } else if (!job && qName === "cron-subscriptions") {
+        // Se for a fila de verificação de assinaturas e não houver job em espera, enfileira a tarefa
+        job = await enqueueJob("cron-subscriptions", "verify_subscriptions", { trigger: "scheduled_or_daemon" });
+        job = await dequeueJob(qName);
+      }
+
       if (!job) break;
 
       let res: any;
-      if (job.name === "sync_groups" || job.queue_name === "evolution-webhook-sync") {
+      if (job.queue_name === "system-health-monitor" || job.name === "health_check" || job.name === "monitor_health") {
+        res = await processHealthMonitorJob(job);
+      } else if (
+        job.name === "sync_groups" || 
+        job.name.startsWith("sync_group_") || 
+        job.queue_name === "evolution-webhook-sync" || 
+        job.queue_name === "whatsapp-groups-sync"
+      ) {
         res = await processGroupSyncJob(job);
+      } else if (job.queue_name === "analytics-aggregation" || job.name === "aggregate_metrics") {
+        res = await processAnalyticsAggregationJob(job);
+      } else if (job.queue_name === "cron-subscriptions" || job.name === "verify_subscriptions") {
+        res = await processCronSubscriptionsJob(job);
+      } else if (job.name === "cleanup_old_jobs") {
+        res = await processHousekeepingJob(job);
       } else {
         res = await processWhatsAppJob(job);
       }

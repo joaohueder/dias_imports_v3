@@ -48,6 +48,8 @@ export async function GET() {
     // Insere filas padrão se vazias
     await pool.query(`
       INSERT IGNORE INTO queues (id, name, description, is_paused) VALUES
+      ('q-health', 'system-health-monitor', 'Monitoramento e consolidação de saúde, latência, CPU, memória e status dos serviços', 0),
+      ('q-groups-sync', 'whatsapp-groups-sync', 'Sincronização periódica e em lote de metadados, participantes e status de grupos com delay anti-ban randômico isolado por empresa', 0),
       ('q-messages-high', 'whatsapp-messages-high', 'Envio de OTP, autenticação e notificações críticas prioritárias', 0),
       ('q-messages-default', 'whatsapp-messages-default', 'Disparos em massa de campanhas para grupos de WhatsApp com delay anti-ban', 0),
       ('q-webhook-sync', 'evolution-webhook-sync', 'Sincronização de webhooks da Evolution API v2.3.7 e status de entrega', 0),
@@ -79,9 +81,11 @@ export async function GET() {
       });
     }
 
-    // 2. Busca histórico das tarefas recentes persistidas
+    // 2. Busca histórico das tarefas recentes persistidas (ocultando tarefas de monitoramento contínuo de saúde)
     const [jobRows] = await pool.execute<RowDataPacket[]>(
-      `SELECT * FROM background_jobs ORDER BY created_at DESC LIMIT 50`
+      `SELECT * FROM background_jobs 
+       WHERE queue_name != 'system-health-monitor' AND name NOT IN ('health_check', 'monitor_health')
+       ORDER BY created_at DESC LIMIT 50`
     );
 
     const queues = queueRows.map((q) => ({
@@ -136,9 +140,12 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await requireSaPermission("jobs", "create");
-    if (!auth.authorized) {
-      return auth.response;
+    const isInternalDaemon = req.headers.get("x-worker-internal") === "daemon";
+    if (!isInternalDaemon) {
+      const auth = await requireSaPermission("jobs", "create");
+      if (!auth.authorized) {
+        return auth.response;
+      }
     }
 
     const body = await req.json();

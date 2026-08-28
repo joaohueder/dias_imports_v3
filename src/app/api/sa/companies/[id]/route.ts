@@ -30,6 +30,8 @@ export async function GET(
          COALESCE(sub.plan_snapshot_max_groups, p.max_groups, 0) as quota_max_groups,
          COALESCE(sub.plan_snapshot_max_products, p.max_products, 0) as quota_max_products,
          COALESCE(sub.plan_snapshot_max_messages_day, p.max_messages_day, c.max_messages_day) as quota_max_messages_day,
+         COALESCE(sub.plan_snapshot_max_views, p.max_views, 0) as quota_max_views,
+         COALESCE(sub.plan_snapshot_max_leads, p.max_leads, 0) as quota_max_leads,
          COALESCE(sub.plan_snapshot_max_instances, p.max_instances, c.max_instances) as quota_max_instances
        FROM companies c 
        LEFT JOIN users u ON u.company_id = c.id 
@@ -45,7 +47,7 @@ export async function GET(
        ) sub ON sub.company_id = c.id
        LEFT JOIN plans p ON sub.plan_id = p.id
        WHERE c.id = ? 
-       GROUP BY c.id, sub.id, sub.plan_snapshot_name, sub.status, sub.plan_snapshot_max_groups, sub.plan_snapshot_max_products, sub.plan_snapshot_max_messages_day, sub.plan_snapshot_max_instances, p.name, p.max_groups, p.max_products, p.max_messages_day, p.max_instances`,
+       GROUP BY c.id, sub.id, sub.plan_snapshot_name, sub.status, sub.plan_snapshot_max_groups, sub.plan_snapshot_max_products, sub.plan_snapshot_max_messages_day, sub.plan_snapshot_max_views, sub.plan_snapshot_max_leads, sub.plan_snapshot_max_instances, p.name, p.max_groups, p.max_products, p.max_messages_day, p.max_views, p.max_leads, p.max_instances`,
       [id]
     );
 

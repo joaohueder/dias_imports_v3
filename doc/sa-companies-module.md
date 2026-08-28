@@ -1,7 +1,7 @@
 # Documentação & Memória: Módulo de Empresas Multi-Tenancy (/sa/companies)
 
-**Data:** 2026-08-25  
-**Versão:** 2026.08.0033  
+**Data:** 2026-08-27  
+**Versão:** 2026.08.0479  
 **Responsável Técnico:** JH7-DESENVOLVEDOR, JH7-DESIGNER, JH7-MESTRE-DOCUMENTACAO, JH7-SECURITY-GUARDIAN  
 
 ---
@@ -14,8 +14,9 @@ O módulo **Empresas** no painel do Super Admin (`/sa/companies`) centraliza o g
 1. **Listagem & Filtros Avançados:**
    - Pesquisa em tempo real por Razão Social, Nome Fantasia, CNPJ/CPF e E-mail corporativo.
    - Filtro por status (`active`, `inactive`, `suspended`).
+   - Botão de **Limpar Filtros** com estado reativo dinâmico (visível na barra de filtros e no estado vazio da listagem).
    - Exibição em tempo real do **Plano e Assinatura Vigente** vinculado (com snapshot de limites e status da assinatura ativa/expirada).
-   - Exibição condicional de **Limites Operacionais**: Limite de Grupos, Limite de Produtos e Limite de Mensagens/dia exibidos exclusivamente quando houver assinatura ativa (`subscription_status === 'active'`); caso contrário, exibe o aviso indicativo "Sem limites definidos".
+   - Exibição de **Limites Operacionais Completos em Linha Dedicada**: Para evitar qualquer truncamento (`...`) ou abreviação, os limites de cada empresa são exibidos em uma sub-linha exclusiva e destacada abaixo dos dados principais (`bg-[#080d1a]/70`), contendo os limites operacionais: **Grupos**, **Produtos**, **Envios/dia**, **Visualizações** e **Leads**.
    - Contadores em tempo real de instâncias liberadas, usuários vinculados e total de tenants ativos.
 
 2. **Cadastro & Edição de Tenants em Abas:**

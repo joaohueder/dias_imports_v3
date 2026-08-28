@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbPool } from "@/lib/db";
-import { getCurrentCompanyUser, getCurrentSaUser } from "@/lib/session";
+import { getCurrentCompanyUser, getCurrentSaUser, getEffectiveCompanyId } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
 
@@ -31,9 +31,10 @@ export async function GET(
       return NextResponse.json({ success: false, message: "Não autorizado" }, { status: 401 });
     }
 
-    const cookieStore = request.cookies;
-    const impersonateCompanyId = cookieStore.get("company_id")?.value;
-    const companyId = user.company_id || (impersonateCompanyId ? parseInt(impersonateCompanyId, 10) : 1);
+    const companyId = await getEffectiveCompanyId(user, request.cookies);
+    if (!companyId) {
+      return NextResponse.json({ success: false, message: "Empresa não associada" }, { status: 403 });
+    }
 
     const pool = getDbPool();
     const [rows] = await pool.query<RowDataPacket[]>(
@@ -90,9 +91,10 @@ export async function PUT(
       return NextResponse.json({ success: false, message: "Não autorizado" }, { status: 401 });
     }
 
-    const cookieStore = request.cookies;
-    const impersonateCompanyId = cookieStore.get("company_id")?.value;
-    const companyId = user.company_id || (impersonateCompanyId ? parseInt(impersonateCompanyId, 10) : 1);
+    const companyId = await getEffectiveCompanyId(user, request.cookies);
+    if (!companyId) {
+      return NextResponse.json({ success: false, message: "Empresa não associada" }, { status: 403 });
+    }
 
     const pool = getDbPool();
     const [existing] = await pool.query<RowDataPacket[]>(
@@ -225,18 +227,51 @@ export async function DELETE(
       return NextResponse.json({ success: false, message: "Não autorizado" }, { status: 401 });
     }
 
-    const cookieStore = request.cookies;
-    const impersonateCompanyId = cookieStore.get("company_id")?.value;
-    const companyId = user.company_id || (impersonateCompanyId ? parseInt(impersonateCompanyId, 10) : 1);
+    const companyId = await getEffectiveCompanyId(user, request.cookies);
+    if (!companyId) {
+      return NextResponse.json({ success: false, message: "Empresa não associada" }, { status: 403 });
+    }
 
     const pool = getDbPool();
     const [existing] = await pool.query<RowDataPacket[]>(
-      `SELECT id, name FROM company_products WHERE id = ? AND company_id = ? LIMIT 1`,
+      `SELECT id, name, sends_count FROM company_products WHERE id = ? AND company_id = ? LIMIT 1`,
       [id, companyId]
     );
 
     if (existing.length === 0) {
       return NextResponse.json({ success: false, message: "Produto não encontrado" }, { status: 404 });
+    }
+
+    const sendsCount = Number(existing[0].sends_count) || 0;
+
+    if (sendsCount > 0) {
+      // Se houver histórico de envios, arquiva para preservar integridade
+      await pool.query(
+        `UPDATE company_products SET is_archived = 1, status = 'inactive' WHERE id = ? AND company_id = ?`,
+        [id, companyId]
+      );
+
+      await logAudit({
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        userRole: user.role,
+        action: "archive",
+        entityType: "company_products",
+        entityId: id,
+        companyId: companyId,
+        oldValues: {
+          product_id: id,
+          company_id: companyId,
+          name: existing[0].name,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        action: "archived",
+        message: "Produto arquivado com sucesso para manter o histórico de envios.",
+      });
     }
 
     await pool.query(`DELETE FROM company_products WHERE id = ? AND company_id = ?`, [id, companyId]);
@@ -259,6 +294,7 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
+      action: "deleted",
       message: "Produto removido com sucesso!",
     });
   } catch (error: any) {

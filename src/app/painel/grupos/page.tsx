@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Users2,
   Plus,
@@ -26,6 +27,9 @@ import {
   Archive,
   PlayCircle,
   PauseCircle,
+  Crown,
+  Sparkles,
+  Lock,
 } from "lucide-react";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 import { useLayout } from "@/context/LayoutContext";
@@ -71,6 +75,7 @@ interface Metrics {
   total_participants: number;
   active_groups: number;
   closed_groups: number;
+  limit_groups?: number;
 }
 
 export default function GruposPage() {
@@ -455,7 +460,49 @@ export default function GruposPage() {
     <PainelLayoutClient>
       <div className="w-full space-y-6">
         {/* 1. CABEÇALHO PADRÃO DA PÁGINA */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+        {/* Banner de Upgrade Estratégico se limite de grupos foi atingido */}
+        {metrics.limit_groups !== undefined && metrics.limit_groups > 0 && metrics.total_groups >= metrics.limit_groups && (
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-950/90 via-rose-950/90 to-purple-950/90 border-2 border-amber-500/80 shadow-[0_0_30px_rgba(245,158,11,0.3)] animate-pulse p-4 sm:p-5">
+            <div className="absolute -top-12 -right-12 w-36 h-36 bg-amber-500/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-12 -left-12 w-36 h-36 bg-rose-500/20 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-rose-600 flex items-center justify-center text-white shadow-lg shadow-amber-500/30 shrink-0">
+                  <Crown className="w-6 h-6 animate-bounce" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500 text-slate-950">
+                      Limite de Grupos Atingido
+                    </span>
+                    <span className="text-xs font-bold text-amber-300">
+                      {metrics.total_groups} de {metrics.limit_groups} grupos cadastrados
+                    </span>
+                  </div>
+                  <h2 className="text-base sm:text-lg font-black text-white mt-1">
+                    Sua audiência não para de crescer! Alcance novos públicos no WhatsApp.
+                  </h2>
+                  <p className="text-xs text-amber-200/80 mt-0.5 leading-relaxed">
+                    Você atingiu a cota máxima de grupos do seu plano atual. Faça um upgrade para sincronizar grupos ilimitados, engajar milhares de novos clientes e potencializar seus disparos.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0 w-full md:w-auto">
+                <Link
+                  href="/painel/configuracoes/assinatura?tab=upgrade"
+                  className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 shadow-lg shadow-rose-600/30 transition-all hover:scale-105 active:scale-95 text-center cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Fazer Upgrade de Plano</span>
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-4 pb-4 border-b border-slate-800/80">
           <div>
             <div className="flex items-center gap-2.5">
               <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
@@ -472,35 +519,44 @@ export default function GruposPage() {
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleSyncWithEvolution}
-                disabled={syncing || loading}
-                title="Sincronizar dados e status dos grupos diretamente com o WhatsApp"
-                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 shadow-sm transition-all focus:outline-none disabled:opacity-50 shrink-0 hover:scale-[1.02] active:scale-[0.98]"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 shrink-0 text-emerald-400 ${syncing ? "animate-spin" : ""}`} />
-                <span className="whitespace-nowrap">{syncing ? "Sincronizando..." : "Sincronizar WhatsApp"}</span>
-              </button>
+          <div className="flex flex-wrap items-center justify-end gap-2.5 w-full pt-1">
+            <button
+              onClick={handleSyncWithEvolution}
+              disabled={syncing || loading}
+              title="Sincronizar dados e status dos grupos diretamente com o WhatsApp"
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 shadow-sm transition-all focus:outline-none disabled:opacity-50 shrink-0 hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 shrink-0 text-emerald-400 ${syncing ? "animate-spin" : ""}`} />
+              <span className="whitespace-nowrap">{syncing ? "Sincronizando..." : "Sincronizar WhatsApp"}</span>
+            </button>
 
-              <button
-                onClick={loadGroups}
-                disabled={loading}
-                title="Recarregar lista"
-                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shadow-sm transition-all focus:outline-none disabled:opacity-50 shrink-0"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${loading ? "animate-spin text-indigo-400" : ""}`} />
-                <span className="whitespace-nowrap">Atualizar Lista</span>
-              </button>
-            </div>
+            <button
+              onClick={loadGroups}
+              disabled={loading}
+              title="Recarregar lista"
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shadow-sm transition-all focus:outline-none disabled:opacity-50 shrink-0"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${loading ? "animate-spin text-indigo-400" : ""}`} />
+              <span className="whitespace-nowrap">Atualizar Lista</span>
+            </button>
 
             <button
               onClick={handleOpenInstanceGroupsModal}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/25 transition-all hover:scale-[1.02] active:scale-[0.98] shrink-0"
+              disabled={metrics.limit_groups !== undefined && metrics.limit_groups > 0 && metrics.total_groups >= metrics.limit_groups}
+              title={metrics.limit_groups !== undefined && metrics.limit_groups > 0 && metrics.total_groups >= metrics.limit_groups ? "Limite de grupos atingido" : "Adicionar novos grupos"}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/25 transition-all hover:scale-[1.02] active:scale-[0.98] shrink-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
-              <Plus className="w-4 h-4 shrink-0" />
-              <span className="whitespace-nowrap">Novo Grupo</span>
+              {metrics.limit_groups !== undefined && metrics.limit_groups > 0 && metrics.total_groups >= metrics.limit_groups ? (
+                <>
+                  <Lock className="w-4 h-4 shrink-0 text-amber-300" />
+                  <span className="whitespace-nowrap">Limite Atingido</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 shrink-0" />
+                  <span className="whitespace-nowrap">Novo Grupo</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -510,7 +566,14 @@ export default function GruposPage() {
           <div className="rounded-2xl bg-[#090f1d]/90 border border-slate-800/80 p-4 shadow-xl shadow-black/20 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total de Grupos</p>
-              <p className="text-2xl font-black text-white mt-1">{metrics.total_groups}</p>
+              <div className="flex items-baseline gap-2 mt-1">
+                <p className="text-2xl font-black text-white">{metrics.total_groups}</p>
+                {metrics.limit_groups !== undefined && (
+                  <span className={`text-xs font-bold ${metrics.limit_groups > 0 && metrics.total_groups >= metrics.limit_groups ? "text-rose-400" : "text-slate-400"}`}>
+                    / {metrics.limit_groups > 0 ? metrics.limit_groups : "Ilimitado"}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="w-11 h-11 rounded-xl bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-center text-indigo-400">
               <Users2 className="w-5 h-5" />

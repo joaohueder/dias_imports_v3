@@ -1,5 +1,11 @@
+import { use } from "react";
 import CompanyForm from "../new/page";
 
-export default function EditCompanyPage() {
-  return <CompanyForm />;
+interface EditCompanyPageProps {
+  params: Promise<{ id: string }>;
+}
+
+export default function EditCompanyPage({ params }: EditCompanyPageProps) {
+  const resolvedParams = use(params);
+  return <CompanyForm companyIdProp={resolvedParams.id} />;
 }

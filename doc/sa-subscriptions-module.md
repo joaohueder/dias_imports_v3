@@ -1,7 +1,7 @@
 # Documentação & Memória: Módulo de Assinaturas (/sa/subscriptions)
 
-**Data:** 2026-08-25  
-**Versão:** 2026.08.0050  
+**Data:** 2026-08-27  
+**Versão:** 2026.08.0481  
 **Responsável Técnico:** JH7-DESENVOLVEDOR, JH7-DESIGNER, JH7-MESTRE-DOCUMENTACAO, JH7-SECURITY-GUARDIAN  
 
 ---
@@ -14,12 +14,13 @@ O módulo **Assinaturas** no painel do Super Admin ([src/app/sa/subscriptions/pa
 1. **Filtro Padrão Inicial em "Ativas":**
    - A listagem carrega por padrão filtrando as assinaturas com status `active` (ativas).
    - Menu rápido com abas segmentadas por status: `Ativas`, `Inadimplentes`, `Canceladas`, `Expiradas` e `Todas` (sem opção de degustação/trialing).
+   - Botão dinâmico de **Limpar Filtros** na barra de busca e no estado vazio.
 
 2. **Organização Visual & UX Aprimorada:**
-   - Alinhamento vertical centralizado (`align-middle`) com larguras de colunas proporcionais equilibradas (`w-[28%]`, `w-[24%]`, `w-[14%]`, `w-[12%]`, `w-[14%]`, `w-[8%]`).
+   - Alinhamento vertical centralizado (`align-middle`) com larguras de colunas proporcionais equilibradas.
    - Bloco de Tenant com Razão Social em destaque, Nome Fantasia e identificação inteligente de documento via `formatDocumentWithLabel` (`CPF: 000.000.000-00` ou `CNPJ: 00.000.000/0000-00`).
    - Detalhamento de vigência com labels cinzas (`Início:` e `Término:`) alinhadas e datas em branco/destaque, sem quebras desordenadas.
-   - Chips de cotas e quotas (`Grupos`, `Produtos` e `Envios/dia`) bem estruturados.
+   - **Exibição de Limites em Linha Dedicada**: Os limites operacionais são exibidos em linha dedicada no formato `uso / limite` para cada recurso contratado (`Grupos`, `Produtos`, `Envios/dia`, `Visualizações` e `Leads`).
    - Botão **Gerenciar** com redirecionamento direto para a aba de assinatura da empresa (`/sa/companies/[id]?tab=subscription`).
 
 3. **Controle de Vigência (Início, Término e Dias Restantes):**

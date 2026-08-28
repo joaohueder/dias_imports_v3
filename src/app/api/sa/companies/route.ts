@@ -31,13 +31,51 @@ export async function GET(request: Request) {
         COALESCE(sub.plan_snapshot_max_groups, p.max_groups, 0) as quota_max_groups,
         COALESCE(sub.plan_snapshot_max_products, p.max_products, 0) as quota_max_products,
         COALESCE(sub.plan_snapshot_max_messages_day, p.max_messages_day, c.max_messages_day) as quota_max_messages_day,
-        COALESCE(sub.plan_snapshot_max_instances, p.max_instances, c.max_instances) as quota_max_instances
+        COALESCE(sub.plan_snapshot_max_views, p.max_views, 0) as quota_max_views,
+        COALESCE(sub.plan_snapshot_max_leads, p.max_leads, 0) as quota_max_leads,
+        COALESCE(sub.plan_snapshot_max_instances, p.max_instances, c.max_instances) as quota_max_instances,
+        COALESCE(usage_groups.current_groups_count, 0) as current_groups_count,
+        COALESCE(usage_products.current_products_count, 0) as current_products_count,
+        COALESCE(usage_products.current_views_count, 0) as current_views_count,
+        COALESCE(usage_leads.current_leads_count, 0) as current_leads_count,
+        COALESCE(usage_instances.current_instances_count, 0) as current_instances_count,
+        COALESCE(usage_jobs.current_messages_today, 0) as current_messages_today
       FROM companies c
       LEFT JOIN (
         SELECT company_id, COUNT(*) as user_count
         FROM users
         GROUP BY company_id
       ) u ON u.company_id = c.id
+      LEFT JOIN (
+        SELECT company_id, COUNT(*) as current_groups_count
+        FROM company_whatsapp_groups
+        GROUP BY company_id
+      ) usage_groups ON usage_groups.company_id = c.id
+      LEFT JOIN (
+        SELECT company_id, COUNT(*) as current_products_count, COALESCE(SUM(views_count), 0) as current_views_count
+        FROM company_products
+        GROUP BY company_id
+      ) usage_products ON usage_products.company_id = c.id
+      LEFT JOIN (
+        SELECT company_id, COUNT(*) as current_leads_count
+        FROM company_leads
+        GROUP BY company_id
+      ) usage_leads ON usage_leads.company_id = c.id
+      LEFT JOIN (
+        SELECT company_id, COUNT(*) as current_instances_count
+        FROM instances
+        GROUP BY company_id
+      ) usage_instances ON usage_instances.company_id = c.id
+      LEFT JOIN (
+        SELECT 
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.company_id')), JSON_UNQUOTE(JSON_EXTRACT(payload, '$.companyId'))) as company_id_val,
+          COUNT(*) as current_messages_today
+        FROM background_jobs
+        WHERE queue_name LIKE 'whatsapp-messages%'
+          AND (status = 'completed' OR status = 'active' OR status = 'waiting' OR status = 'delayed')
+          AND DATE(created_at) = CURDATE()
+        GROUP BY company_id_val
+      ) usage_jobs ON usage_jobs.company_id_val = CAST(c.id AS CHAR)
       LEFT JOIN (
         SELECT s1.*
         FROM subscriptions s1

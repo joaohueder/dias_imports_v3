@@ -18,7 +18,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    const { max_groups, max_products, max_messages_day, max_instances } = body;
+    const { max_groups, max_products, max_messages_day, max_views, max_leads, max_instances } = body;
 
     // Busca a assinatura
     const [subRows] = await pool.query<RowDataPacket[]>(
@@ -49,6 +49,16 @@ export async function PATCH(
     if (max_messages_day !== undefined) {
       updates.push("plan_snapshot_max_messages_day = ?");
       values.push(parseInt(String(max_messages_day), 10) || 0);
+    }
+
+    if (max_views !== undefined) {
+      updates.push("plan_snapshot_max_views = ?");
+      values.push(parseInt(String(max_views), 10) || 0);
+    }
+
+    if (max_leads !== undefined) {
+      updates.push("plan_snapshot_max_leads = ?");
+      values.push(parseInt(String(max_leads), 10) || 0);
     }
 
     if (max_instances !== undefined) {

@@ -39,6 +39,19 @@ export function getDbPool(): Pool {
 export async function initAuthDatabase(): Promise<void> {
   const db = getDbPool();
 
+  try {
+    await db.query(`ALTER TABLE plans ADD COLUMN max_views INT NOT NULL DEFAULT 0 AFTER max_messages_day`);
+  } catch {}
+  try {
+    await db.query(`ALTER TABLE plans ADD COLUMN max_leads INT NOT NULL DEFAULT 0 AFTER max_views`);
+  } catch {}
+  try {
+    await db.query(`ALTER TABLE subscriptions ADD COLUMN plan_snapshot_max_views INT NULL DEFAULT 0 AFTER plan_snapshot_max_messages_day`);
+  } catch {}
+  try {
+    await db.query(`ALTER TABLE subscriptions ADD COLUMN plan_snapshot_max_leads INT NULL DEFAULT 0 AFTER plan_snapshot_max_views`);
+  } catch {}
+
   // Cria tabela de empresas se não existir
   await db.query(`
     CREATE TABLE IF NOT EXISTS companies (
@@ -55,6 +68,10 @@ export async function initAuthDatabase(): Promise<void> {
       max_instances INT NOT NULL DEFAULT 5,
       max_messages_day INT NOT NULL DEFAULT 5000,
       logo_url TEXT NULL,
+      meta_pixel_id VARCHAR(50) NULL,
+      meta_pixel_access_token TEXT NULL,
+      meta_pixel_test_code VARCHAR(50) NULL,
+      meta_pixel_active BOOLEAN NOT NULL DEFAULT FALSE,
       address_zipcode VARCHAR(20) NULL,
       address_street VARCHAR(255) NULL,
       address_number VARCHAR(50) NULL,
@@ -98,6 +115,8 @@ export async function initAuthDatabase(): Promise<void> {
       max_groups INT NOT NULL DEFAULT 10,
       max_products INT NOT NULL DEFAULT 100,
       max_messages_day INT NOT NULL DEFAULT 1000,
+      max_views INT NOT NULL DEFAULT 0,
+      max_leads INT NOT NULL DEFAULT 0,
       max_instances INT NOT NULL DEFAULT 1,
       is_featured BOOLEAN NOT NULL DEFAULT FALSE,
       sort_order INT NOT NULL DEFAULT 0,
@@ -117,6 +136,8 @@ export async function initAuthDatabase(): Promise<void> {
       plan_snapshot_max_groups INT NULL DEFAULT 0,
       plan_snapshot_max_products INT NULL DEFAULT 0,
       plan_snapshot_max_messages_day INT NULL DEFAULT 0,
+      plan_snapshot_max_views INT NULL DEFAULT 0,
+      plan_snapshot_max_leads INT NULL DEFAULT 0,
       plan_snapshot_max_instances INT NULL DEFAULT 1,
       plan_snapshot_billing_cycle VARCHAR(50) NULL DEFAULT 'monthly',
       plan_snapshot_features JSON NULL,
@@ -255,6 +276,95 @@ export async function initAuthDatabase(): Promise<void> {
   } catch {
     // Coluna já existente
   }
+
+  // Garante as colunas last_accessed_at e is_archived se a tabela já existia antes
+  try {
+    await db.query(`
+      ALTER TABLE company_products 
+      ADD COLUMN last_accessed_at TIMESTAMP NULL DEFAULT NULL AFTER clicks_count,
+      ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT FALSE AFTER status;
+    `);
+  } catch {
+    // Colunas já existentes
+  }
+
+  // Garante colunas de Meta Ads Pixel na tabela companies se já existia
+  try {
+    await db.query(`
+      ALTER TABLE companies 
+      ADD COLUMN meta_pixel_id VARCHAR(50) NULL AFTER logo_url,
+      ADD COLUMN meta_pixel_access_token TEXT NULL AFTER meta_pixel_id,
+      ADD COLUMN meta_pixel_test_code VARCHAR(50) NULL AFTER meta_pixel_access_token,
+      ADD COLUMN meta_pixel_active BOOLEAN NOT NULL DEFAULT FALSE AFTER meta_pixel_test_code;
+    `);
+  } catch {
+    // Colunas já existentes
+  }
+
+  // Garante colunas adicionais em company_group_landing_pages se já existia
+  try {
+    await db.query(`
+      ALTER TABLE company_group_landing_pages 
+      ADD COLUMN testimonials_enabled BOOLEAN NOT NULL DEFAULT TRUE AFTER testimonials;
+    `);
+  } catch {
+    // Coluna já existente
+  }
+
+  // Garante tabelas de landing pages de grupo e leads da empresa
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS company_group_landing_pages (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      company_id INT NOT NULL,
+      title VARCHAR(255) NOT NULL DEFAULT 'Grupo VIP Exclusivo',
+      headline VARCHAR(255) NOT NULL DEFAULT 'Receba ofertas secretas e novidades em primeira mão!',
+      subheadline TEXT NULL,
+      slug VARCHAR(255) NOT NULL,
+      badge_text VARCHAR(100) NULL DEFAULT '⚡ VAGAS LIMITADAS',
+      group_id INT NULL,
+      invite_link TEXT NOT NULL,
+      cover_image TEXT NULL,
+      logo_url TEXT NULL,
+      layout_color VARCHAR(50) NOT NULL DEFAULT '#6366f1',
+      layout_theme VARCHAR(50) NOT NULL DEFAULT 'dark',
+      layout_font VARCHAR(50) NOT NULL DEFAULT 'plusjakarta_inter',
+      form_button_text VARCHAR(100) NOT NULL DEFAULT 'Entrar no Grupo VIP Grátis',
+      benefits JSON NULL,
+      testimonials JSON NULL,
+      testimonials_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      social_proof_count INT NOT NULL DEFAULT 847,
+      modal_title VARCHAR(255) NOT NULL DEFAULT 'Tudo pronto! 🎉',
+      modal_description TEXT NULL,
+      modal_button_text VARCHAR(100) NOT NULL DEFAULT 'Acessar Grupo VIP no WhatsApp',
+      status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+      views_count INT NOT NULL DEFAULT 0,
+      leads_count INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_landing_company_id (company_id),
+      INDEX idx_landing_slug (company_id, slug),
+      INDEX idx_landing_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS company_leads (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      company_id INT NOT NULL,
+      landing_page_id INT NULL,
+      name VARCHAR(255) NOT NULL,
+      whatsapp VARCHAR(50) NOT NULL,
+      ip_address VARCHAR(100) NULL,
+      user_agent TEXT NULL,
+      origin_slug VARCHAR(255) NULL,
+      status ENUM('converted', 'pending') NOT NULL DEFAULT 'converted',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_leads_company_id (company_id),
+      INDEX idx_leads_landing_id (landing_page_id),
+      INDEX idx_leads_whatsapp (whatsapp),
+      INDEX idx_leads_created_at (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
 
   // Insere o super admin padrão inicial se não existir
   await db.query(`

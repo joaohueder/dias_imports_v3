@@ -1,64 +1,51 @@
 import { NextResponse } from "next/server";
-import { execFile } from "child_process";
-import { promisify } from "util";
-import path from "path";
-
-const execFileAsync = promisify(execFile);
+import { getDbPool } from "@/lib/db";
+import { RowDataPacket } from "mysql2";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Consulta status dos processos do PM2 chamando diretamente o binário local via execFile (muito mais rápido que npx e compatível com o bundler do Next.js)
- */
-async function queryPm2List(): Promise<any[]> {
-  const pm2Bin = path.join(process.cwd(), "node_modules", "pm2", "bin", "pm2");
-  
-  // Executa diretamente o node com o script do PM2
-  const { stdout } = await execFileAsync(process.execPath, [pm2Bin, "jlist"], {
-    cwd: process.cwd(),
-    timeout: 8000,
-    windowsHide: true,
-  });
-
-  const trimmed = stdout.trim();
-  const jsonStart = trimmed.indexOf("[");
-  const jsonEnd = trimmed.lastIndexOf("]");
-  if (jsonStart !== -1 && jsonEnd !== -1) {
-    return JSON.parse(trimmed.substring(jsonStart, jsonEnd + 1));
-  }
-  return [];
-}
-
 export async function GET() {
-  const start = Date.now();
   try {
-    const list = await queryPm2List();
+    const { readHealthSnapshotFromFile } = await import("@/lib/health-snapshot");
+    const fileSnap = readHealthSnapshotFromFile();
 
-    const onlineProcesses = Array.isArray(list)
-      ? list.filter((item) => item.pm2_env?.status === "online")
-      : [];
+    // Se o snapshot tiver menos de 15 segundos, usa os dados do snapshot
+    if (fileSnap && fileSnap.updated_at) {
+      const snapAgeMs = Date.now() - new Date(fileSnap.updated_at).getTime();
+      if (snapAgeMs < 15000) {
+        const isDbOffline = fileSnap.db_status === "offline";
+        const status = isDbOffline ? "offline" : fileSnap.pm2_status;
+        return NextResponse.json({
+          status,
+          latencyMs: 0,
+          totalProcesses: 1,
+          onlineProcesses: status === "online" ? 1 : 0,
+          message: isDbOffline ? "Comprometido por indisponibilidade do banco" : undefined,
+          timestamp: fileSnap.updated_at,
+        });
+      }
+    }
 
-    const isOnline = onlineProcesses.length > 0;
-    const latencyMs = Date.now() - start;
+    // Probe direto em tempo real no PM2
+    const { isPm2DaemonRunning } = await import("@/lib/pm2");
+    const isRunning = await isPm2DaemonRunning();
+    const status = isRunning ? "online" : "offline";
 
     return NextResponse.json({
-      status: isOnline ? "online" : "offline",
-      latencyMs,
-      totalProcesses: list.length,
-      onlineProcesses: onlineProcesses.length,
-      processes: list.map((item) => ({
-        name: item.name,
-        status: item.pm2_env?.status,
-        cpu: item.monit?.cpu || 0,
-        memory: item.monit?.memory || 0,
-      })),
+      status,
+      latencyMs: 0,
+      totalProcesses: 1,
+      onlineProcesses: isRunning ? 1 : 0,
+      timestamp: new Date().toISOString(),
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "PM2 não está rodando";
     return NextResponse.json(
       {
         status: "offline",
-        message,
+        message: "Erro ao verificar status do PM2",
+        latencyMs: 0,
+        totalProcesses: 0,
+        onlineProcesses: 0,
         timestamp: new Date().toISOString(),
       },
       { status: 200 }

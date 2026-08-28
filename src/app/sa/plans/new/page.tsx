@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   AlertCircle,
   HelpCircle,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
@@ -45,6 +46,8 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
     max_groups: "10",
     max_products: "100",
     max_messages_day: "1000",
+    max_views: "0",
+    max_leads: "0",
     is_featured: false,
   });
 
@@ -72,6 +75,8 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
             max_groups: String(data.plan.max_groups ?? "10"),
             max_products: String(data.plan.max_products ?? "100"),
             max_messages_day: String(data.plan.max_messages_day ?? "1000"),
+            max_views: String(data.plan.max_views ?? "0"),
+            max_leads: String(data.plan.max_leads ?? "0"),
             is_featured: Boolean(data.plan.is_featured),
           };
           setFormData(loaded);
@@ -145,6 +150,12 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
     if (isNaN(Number(formData.max_messages_day)) || Number(formData.max_messages_day) < 0) {
       newErrors.max_messages_day = "Informe um limite válido";
     }
+    if (isNaN(Number(formData.max_views)) || Number(formData.max_views) < 0) {
+      newErrors.max_views = "Informe um limite válido (0 para ilimitado)";
+    }
+    if (isNaN(Number(formData.max_leads)) || Number(formData.max_leads) < 0) {
+      newErrors.max_leads = "Informe um limite válido (0 para ilimitado)";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -203,6 +214,8 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
         max_groups: "10",
         max_products: "100",
         max_messages_day: "1000",
+        max_views: "0",
+        max_leads: "0",
         is_featured: false,
       });
       setErrors({});
@@ -212,7 +225,7 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
 
   const isFormInvalid = useMemo(() => {
     if (!formData.name.trim()) return true;
-    if (errors.name || errors.price || errors.max_groups || errors.max_products || errors.max_messages_day) return true;
+    if (errors.name || errors.price || errors.max_groups || errors.max_products || errors.max_messages_day || errors.max_views || errors.max_leads) return true;
     return false;
   }, [formData, errors]);
 
@@ -432,6 +445,44 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
                   Msgs/dia somando grupos.
                 </span>
               </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Limite de Views
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    name="max_views"
+                    value={formData.max_views}
+                    onChange={handleChange}
+                    placeholder="0"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950/60 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50"
+                  />
+                </div>
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  0 = visualizações ilimitadas.
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Limite de Leads
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    name="max_leads"
+                    value={formData.max_leads}
+                    onChange={handleChange}
+                    placeholder="0"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950/60 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50"
+                  />
+                </div>
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  0 = leads ilimitados capturados.
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -517,6 +568,14 @@ export default function PlanFormPage({ params }: PlanFormPageProps) {
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
                 <span>{Number(formData.max_messages_day || 0).toLocaleString("pt-BR")} Envios/dia</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                <span>{formData.max_views === "0" ? "Views Ilimitadas" : `${Number(formData.max_views || 0).toLocaleString("pt-BR")} Views`}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Users className="w-3.5 h-3.5 text-amber-400" />
+                <span>{formData.max_leads === "0" ? "Leads Ilimitados" : `${Number(formData.max_leads || 0).toLocaleString("pt-BR")} Leads`}</span>
               </div>
               <div className="flex items-center gap-2 text-slate-400">
                 <Server className="w-3.5 h-3.5 text-slate-500" />

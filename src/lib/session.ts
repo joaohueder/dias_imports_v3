@@ -3,7 +3,16 @@ import { cookies } from "next/headers";
 import { getDbPool } from "@/lib/db";
 import { RowDataPacket } from "mysql2";
 
-const SESSION_SECRET = process.env.SESSION_SECRET || "jh7_super_secure_session_secret_key_2026_marketing";
+function getSessionSecret(): string {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("CRITICAL SECURITY ERROR: SESSION_SECRET is not configured in production environment.");
+    }
+    return "jh7_super_secure_session_secret_key_2026_marketing_dev_only";
+  }
+  return secret;
+}
 
 export interface CurrentUserSession {
   id: number;
@@ -17,8 +26,9 @@ export interface CurrentUserSession {
 
 // Cria assinatura HMAC-SHA256 para evitar adulteração de cookie
 export function signSessionToken(payload: { id: number; email: string; role: string }): string {
+  const secret = getSessionSecret();
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const signature = crypto.createHmac("sha256", SESSION_SECRET).update(data).digest("base64url");
+  const signature = crypto.createHmac("sha256", secret).update(data).digest("base64url");
   return `${data}.${signature}`;
 }
 
@@ -27,7 +37,8 @@ export function verifySessionToken(token: string): { id: number; email: string; 
     const [data, signature] = token.split(".");
     if (!data || !signature) return null;
 
-    const expectedSignature = crypto.createHmac("sha256", SESSION_SECRET).update(data).digest("base64url");
+    const secret = getSessionSecret();
+    const expectedSignature = crypto.createHmac("sha256", secret).update(data).digest("base64url");
     if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
       return null;
     }

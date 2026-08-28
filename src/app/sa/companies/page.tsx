@@ -26,6 +26,8 @@ import {
   Check,
   X,
   Package,
+  Eye,
+  UserCheck,
   ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -41,6 +43,8 @@ interface Company {
   document: string | null;
   email: string | null;
   phone: string | null;
+  whatsapp: string | null;
+  admin_whatsapp: string | null;
   plan: string;
   current_plan_name?: string;
   subscription_status?: "active" | "past_due" | "canceled" | "expired" | null;
@@ -48,7 +52,15 @@ interface Company {
   quota_max_groups?: number;
   quota_max_products?: number;
   quota_max_messages_day?: number;
+  quota_max_views?: number;
+  quota_max_leads?: number;
   quota_max_instances?: number;
+  current_groups_count?: number;
+  current_products_count?: number;
+  current_views_count?: number;
+  current_leads_count?: number;
+  current_instances_count?: number;
+  current_messages_today?: number;
   status: "active" | "inactive" | "suspended";
   max_instances: number;
   max_messages_day: number;
@@ -310,6 +322,14 @@ export default function CompaniesPage() {
     (c) => c.subscription_status === "expired" || c.subscription_status === "canceled" || !c.subscription_status
   ).length;
 
+  const hasActiveFilters = searchTerm.trim().length > 0 || statusFilter !== "all";
+
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setCurrentPage(1);
+  };
+
   const paginatedCompanies = useMemo(() => {
     const start = (currentPage - 1) * 10;
     return companies.slice(start, start + 10);
@@ -431,6 +451,18 @@ export default function CompaniesPage() {
               <option value="suspended" className="bg-slate-900 text-slate-200">Suspensas</option>
             </select>
           </div>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-semibold transition-all whitespace-nowrap active:scale-95 cursor-pointer shrink-0"
+              title="Limpar todos os filtros"
+            >
+              <XCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span>Limpar Filtros</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -449,243 +481,286 @@ export default function CompaniesPage() {
             <div>
               <h3 className="text-base font-bold text-white">Nenhuma empresa encontrada</h3>
               <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                Não localizamos nenhuma empresa correspondente aos critérios de busca ou filtros aplicados.
+                {hasActiveFilters
+                  ? "Não localizamos nenhuma empresa correspondente aos filtros de busca aplicados."
+                  : "Não localizamos nenhuma empresa cadastrada no sistema."}
               </p>
             </div>
-            <Link
-              href="/sa/companies/new"
-              className="mt-2 flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500 transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Cadastrar Primeira Empresa</span>
-            </Link>
+            {hasActiveFilters ? (
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all cursor-pointer shadow-md"
+              >
+                <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                <span>Limpar Filtros</span>
+              </button>
+            ) : (
+              <Link
+                href="/sa/companies/new"
+                className="mt-2 flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Cadastrar Primeira Empresa</span>
+              </Link>
+            )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-left text-xs table-fixed">
+              <colgroup>
+                <col className="w-[28%]" />
+                <col className="w-[22%]" />
+                <col className="w-[20%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+              </colgroup>
               <thead className="bg-[#0b1222] border-b border-slate-800/90 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
                 <tr>
-                  <th className="px-5 py-3.5">Empresa / Razão Social</th>
-                  <th className="px-5 py-3.5">Documento / Contato</th>
-                  <th className="px-5 py-3.5">Plano</th>
-                  <th className="px-5 py-3.5">Limites Operacionais</th>
-                  <th className="px-5 py-3.5">Status</th>
-                  <th className="px-5 py-3.5 text-right">Ações</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Empresa / Razão Social</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Contato</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Plano & Assinatura</th>
+                  <th className="px-2 py-3 text-center whitespace-nowrap">Status</th>
+                  <th className="px-4 py-3 text-right whitespace-nowrap">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {paginatedCompanies.map((company) => (
-                  <tr
-                    key={company.id}
-                    className="hover:bg-slate-900/40 transition-colors group"
-                  >
-                    {/* Nome & Fantasia */}
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-bold text-sm shrink-0">
-                          {company.name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="font-bold text-white text-sm group-hover:text-indigo-300 transition-colors">
-                            {company.name}
+                  <React.Fragment key={company.id}>
+                    <tr className="hover:bg-slate-900/40 transition-colors group">
+                      {/* Nome & Fantasia */}
+                      <td className="px-4 py-3 min-w-0">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-bold text-xs shrink-0">
+                            {company.name.slice(0, 2).toUpperCase()}
                           </div>
-                          {company.trade_name && (
-                            <div className="text-[11px] text-slate-400">
-                              {company.trade_name}
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-white text-xs leading-tight truncate group-hover:text-indigo-300 transition-colors">
+                              {company.name}
+                            </div>
+                            {company.trade_name && (
+                              <div className="text-[11px] text-slate-400 leading-tight truncate mt-0.5">
+                                {company.trade_name}
+                              </div>
+                            )}
+                            {company.address_city && (
+                              <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
+                                <MapPin className="w-3 h-3 shrink-0 text-slate-500" />
+                                <span className="truncate">{company.address_city} - {company.address_state || "BR"}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Contato (WhatsApp & E-mail) */}
+                      <td className="px-4 py-3 min-w-0">
+                        <div className="space-y-1 min-w-0">
+                          {company.whatsapp || company.phone || company.admin_whatsapp ? (
+                            <div className="text-slate-200 text-xs leading-tight flex items-center gap-1.5 truncate">
+                              <Phone className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                              <span className="font-medium truncate">
+                                {maskPhone(company.whatsapp || company.phone || company.admin_whatsapp || "")}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="text-slate-500 text-[11px] italic flex items-center gap-1.5 truncate">
+                              <Phone className="w-3.5 h-3.5 shrink-0 text-slate-600" />
+                              <span className="truncate">Sem WhatsApp</span>
                             </div>
                           )}
-                          {company.address_city && (
-                            <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
-                              <MapPin className="w-3 h-3" />
-                              <span>{company.address_city} - {company.address_state || "BR"}</span>
+                          {company.email && (
+                            <div className="text-slate-400 text-[11px] leading-tight flex items-center gap-1.5 truncate">
+                              <Mail className="w-3 h-3 shrink-0 text-slate-500" />
+                              <span className="truncate">{company.email}</span>
                             </div>
                           )}
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Documento & Contato */}
-                    <td className="px-5 py-4">
-                      <div className="space-y-1">
-                        <div className="font-mono text-slate-300 text-[11px]">
-                          {company.document || "Sem documento"}
-                        </div>
-                        {company.email && (
-                          <div className="text-slate-400 text-[11px] flex items-center gap-1.5">
-                            <Mail className="w-3 h-3 text-slate-500" />
-                            <span>{company.email}</span>
+                      {/* Plano / Assinatura Atual */}
+                      <td className="px-4 py-3 min-w-0">
+                        {company.active_subscription_id ? (
+                          <div className="space-y-1 min-w-0">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 font-semibold text-[11px] truncate max-w-full">
+                              <Layers className="w-3 h-3 shrink-0" />
+                              <span className="truncate">{company.current_plan_name || company.plan}</span>
+                            </span>
+                            <div className="flex items-center gap-1 text-[10px] text-emerald-400 font-medium truncate">
+                              <CheckCircle2 className="w-3 h-3 shrink-0 text-emerald-400" />
+                              <span className="truncate">Assinatura Ativa</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-1 min-w-0">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 font-semibold text-[11px] truncate max-w-full">
+                              <AlertTriangle className="w-3 h-3 shrink-0 text-amber-400" />
+                              <span className="truncate">Sem Assinatura</span>
+                            </span>
                           </div>
                         )}
-                        {company.phone && (
-                          <div className="text-slate-400 text-[11px] flex items-center gap-1.5">
-                            <Phone className="w-3 h-3 text-slate-500" />
-                            <span>{company.phone}</span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Plano / Assinatura Atual */}
-                    <td className="px-5 py-4">
-                      {company.active_subscription_id ? (
-                        <div className="space-y-1">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 font-semibold text-[11px]">
-                            <Layers className="w-3 h-3" />
-                            {company.current_plan_name || company.plan}
-                          </span>
-                          <div className="flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                            <span>Assinatura Ativa</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-1">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 font-semibold text-[11px]">
-                            <AlertTriangle className="w-3 h-3 text-amber-400" />
-                            <span>Sem Assinatura</span>
-                          </span>
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Limites Operacionais */}
-                    <td className="px-5 py-4">
-                      {company.active_subscription_id && company.subscription_status === "active" ? (
-                        <div className="space-y-1 text-[11px]">
-                          <div className="flex items-center gap-1.5 text-slate-300">
-                            <Users className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                            <span>
-                              {company.quota_max_groups === 0 ? "Grupos: Ilimitado" : `${company.quota_max_groups ?? 0} grupos`}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-slate-300">
-                            <Package className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-                            <span>
-                              {company.quota_max_products === 0 ? "Produtos: Ilimitado" : `${company.quota_max_products ?? 0} produtos`}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-slate-400">
-                            <MessageSquare className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                            <span>
-                              {(company.quota_max_messages_day ?? company.max_messages_day).toLocaleString("pt-BR")} msgs/dia
-                            </span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-slate-500 text-[11px] italic flex items-center gap-1.5">
-                          <span>Sem limites definidos</span>
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-5 py-4">
-                      {can("companies", "delete") ? (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenStatusModal(company)}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all hover:scale-105 cursor-pointer ${
-                            company.status === "active"
-                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25"
-                              : company.status === "suspended"
-                              ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25"
-                              : "bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700"
-                          }`}
-                          title="Clique para alterar status"
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              company.status === "active"
-                                ? "bg-emerald-400 animate-pulse"
-                                : company.status === "suspended"
-                                ? "bg-rose-400"
-                                : "bg-slate-500"
-                            }`}
-                          />
-                          <span>
-                            {company.status === "active"
-                              ? "Ativa"
-                              : company.status === "suspended"
-                              ? "Suspensa"
-                              : "Inativa"}
-                          </span>
-                          <ArrowUpDown className="w-2.5 h-2.5 ml-0.5 opacity-60" />
-                        </button>
-                      ) : (
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            company.status === "active"
-                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
-                              : company.status === "suspended"
-                              ? "bg-rose-500/15 text-rose-300 border border-rose-500/30"
-                              : "bg-slate-800 text-slate-400 border border-slate-700"
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              company.status === "active"
-                                ? "bg-emerald-400"
-                                : company.status === "suspended"
-                                ? "bg-rose-400"
-                                : "bg-slate-500"
-                            }`}
-                          />
-                          <span>
-                            {company.status === "active"
-                              ? "Ativa"
-                              : company.status === "suspended"
-                              ? "Suspensa"
-                              : "Inativa"}
-                          </span>
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Ações */}
-                    <td className="px-5 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {can("companies", "impersonate") && (
+                      {/* Status */}
+                      <td className="px-2 py-3 text-center min-w-0">
+                        {can("companies", "delete") ? (
                           <button
                             type="button"
-                            onClick={() => handleImpersonate(company)}
-                            disabled={impersonatingId === company.id}
-                            className="p-2 rounded-xl text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 transition-all disabled:opacity-50 cursor-pointer"
-                            title={`Impersonalizar painel de "${company.name}"`}
+                            onClick={() => handleOpenStatusModal(company)}
+                            className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all hover:scale-105 cursor-pointer whitespace-nowrap ${
+                              company.status === "active"
+                                ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25"
+                                : company.status === "suspended"
+                                ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25"
+                                : "bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700"
+                            }`}
+                            title="Clique para alterar status"
                           >
-                            {impersonatingId === company.id ? (
-                              <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
-                            ) : (
-                              <ExternalLink className="w-4 h-4" />
-                            )}
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                company.status === "active"
+                                  ? "bg-emerald-400 animate-pulse"
+                                  : company.status === "suspended"
+                                  ? "bg-rose-400"
+                                  : "bg-slate-500"
+                              }`}
+                            />
+                            <span>
+                              {company.status === "active"
+                                ? "Ativa"
+                                : company.status === "suspended"
+                                ? "Suspensa"
+                                : "Inativa"}
+                            </span>
+                            <ArrowUpDown className="w-2.5 h-2.5 ml-0.5 opacity-60 shrink-0" />
                           </button>
-                        )}
-                        {can("companies", "edit") && (
-                          <Link
-                            href={`/sa/companies/${company.id}`}
-                            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors inline-block"
-                            title="Editar Empresa"
+                        ) : (
+                          <span
+                            className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${
+                              company.status === "active"
+                                ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                                : company.status === "suspended"
+                                ? "bg-rose-500/15 text-rose-300 border border-rose-500/30"
+                                : "bg-slate-800 text-slate-400 border border-slate-700"
+                            }`}
                           >
-                            <Edit2 className="w-4 h-4" />
-                          </Link>
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                company.status === "active"
+                                  ? "bg-emerald-400"
+                                  : company.status === "suspended"
+                                  ? "bg-rose-400"
+                                  : "bg-slate-500"
+                              }`}
+                            />
+                            <span>
+                              {company.status === "active"
+                                ? "Ativa"
+                                : company.status === "suspended"
+                                ? "Suspensa"
+                                : "Inativa"}
+                            </span>
+                          </span>
                         )}
-                        {can("companies", "delete") && (
-                          <button
-                            onClick={() => {
-                              setCompanyToDelete(company);
-                              setDeleteModalOpen(true);
-                            }}
-                            className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                            title="Excluir Empresa"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                      </td>
+
+                      {/* Ações */}
+                      <td className="px-4 py-3 text-right min-w-0">
+                        <div className="flex items-center justify-end gap-1.5 shrink-0">
+                          {can("companies", "impersonate") && (
+                            <button
+                              type="button"
+                              onClick={() => handleImpersonate(company)}
+                              disabled={impersonatingId === company.id}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 transition-all disabled:opacity-50 cursor-pointer shrink-0"
+                              title={`Impersonalizar painel de "${company.name}"`}
+                            >
+                              {impersonatingId === company.id ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                              ) : (
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          )}
+                          {can("companies", "edit") && (
+                            <Link
+                              href={`/sa/companies/${company.id}`}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0"
+                              title="Editar Empresa"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </Link>
+                          )}
+                          {can("companies", "delete") && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCompanyToDelete(company);
+                                setDeleteModalOpen(true);
+                              }}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center text-rose-400/80 hover:text-rose-300 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all cursor-pointer shrink-0"
+                              title="Excluir Empresa"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Linha Dedicada: Limites Operacionais (Consumo / Limite da Assinatura) */}
+                    <tr className="bg-[#080d1a]/70 border-b border-slate-800/80">
+                      <td colSpan={5} className="px-4 py-2.5">
+                        {company.active_subscription_id && company.subscription_status === "active" ? (
+                          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-300">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 mr-1">
+                              Limites:
+                            </span>
+
+                            <div className="flex items-center gap-1.5 whitespace-nowrap" title={`Grupos de WhatsApp: ${company.current_groups_count ?? 0} utilizados de ${company.quota_max_groups === 0 ? "Ilimitado" : company.quota_max_groups}`}>
+                              <Users className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                              <span>
+                                Grupos: <strong className="text-white font-semibold">{company.current_groups_count ?? 0}</strong>/{company.quota_max_groups === 0 ? "∞" : company.quota_max_groups}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 whitespace-nowrap" title={`Produtos no Catálogo: ${company.current_products_count ?? 0} cadastrados de ${company.quota_max_products === 0 ? "Ilimitado" : company.quota_max_products}`}>
+                              <Package className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                              <span>
+                                Produtos: <strong className="text-white font-semibold">{company.current_products_count ?? 0}</strong>/{company.quota_max_products === 0 ? "∞" : company.quota_max_products}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 whitespace-nowrap" title={`Disparos Hoje: ${company.current_messages_today ?? 0} enviados de ${(company.quota_max_messages_day ?? company.max_messages_day ?? 0) === 0 ? "Ilimitado" : (company.quota_max_messages_day ?? company.max_messages_day ?? 0).toLocaleString("pt-BR")}`}>
+                              <MessageSquare className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span>
+                                Envios/dia: <strong className="text-white font-semibold">{company.current_messages_today ?? 0}</strong>/{(company.quota_max_messages_day ?? company.max_messages_day ?? 0) === 0 ? "∞" : (company.quota_max_messages_day ?? company.max_messages_day ?? 0).toLocaleString("pt-BR")}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 whitespace-nowrap" title={`Visualizações de Catálogo: ${(company.current_views_count ?? 0).toLocaleString("pt-BR")} visualizações de ${(company.quota_max_views ?? 0) === 0 ? "Ilimitado" : (company.quota_max_views ?? 0).toLocaleString("pt-BR")}`}>
+                              <Eye className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                              <span>
+                                Visualizações: <strong className="text-white font-semibold">{(company.current_views_count ?? 0).toLocaleString("pt-BR")}</strong>/{(company.quota_max_views ?? 0) === 0 ? "∞" : (company.quota_max_views ?? 0).toLocaleString("pt-BR")}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 whitespace-nowrap" title={`Leads Capturados: ${(company.current_leads_count ?? 0).toLocaleString("pt-BR")} leads de ${(company.quota_max_leads ?? 0) === 0 ? "Ilimitado" : (company.quota_max_leads ?? 0).toLocaleString("pt-BR")}`}>
+                              <UserCheck className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                              <span>
+                                Leads: <strong className="text-white font-semibold">{(company.current_leads_count ?? 0).toLocaleString("pt-BR")}</strong>/{(company.quota_max_leads ?? 0) === 0 ? "∞" : (company.quota_max_leads ?? 0).toLocaleString("pt-BR")}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-slate-500 text-[11px] italic flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">Limites:</span>
+                            <span>Sem assinatura ativa / sem limites definidos</span>
+                          </div>
                         )}
-                        {!can("companies", "impersonate") && !can("companies", "edit") && !can("companies", "delete") && (
-                          <span className="text-[11px] text-slate-600 italic">Somente leitura</span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                    </tr>
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

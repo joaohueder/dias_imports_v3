@@ -59,6 +59,7 @@ export const Modelo3HighConversion: React.FC<TemplateProductProps> = ({
   cta_text = "Garantir Oferta Exclusiva",
   cta_icon = "zap",
   cta_animation = "pulse",
+  headline,
   benefits,
   benefits_icon = "check",
   offer_box_style = "model_1",
@@ -211,11 +212,26 @@ export const Modelo3HighConversion: React.FC<TemplateProductProps> = ({
         <div className="w-full text-left mb-3">
           <h1
             style={titleFontStyle}
-            className={`font-black tracking-tight ${isInsideMockup ? "text-[21px]" : "text-[25px] sm:text-[27px]"} ${isDark ? "text-white" : "text-slate-950"} leading-tight`}
+            className={`font-bold tracking-tight ${isInsideMockup ? "text-[20px]" : "text-[24px] sm:text-[26px]"} ${isDark ? "text-white" : "text-slate-950"} leading-tight`}
           >
             {name || "Produto Premium Selecionado"}
           </h1>
-          <p className="text-[11.5px] text-slate-400 font-medium mt-1">
+          
+          {/* HEADLINE / PROMESSA PRINCIPAL */}
+          {headline ? (
+            <div
+              className={`mt-2 p-2.5 rounded-xl border flex items-center gap-2 ${
+                isDark ? "bg-indigo-950/40 border-indigo-500/30 text-indigo-200" : "bg-indigo-50/80 border-indigo-200 text-indigo-950"
+              }`}
+            >
+              <Sparkles className="w-4 h-4 shrink-0 text-indigo-500" />
+              <p className="text-xs sm:text-[13px] font-semibold leading-snug">
+                {headline}
+              </p>
+            </div>
+          ) : null}
+
+          <p className="text-[11.5px] text-slate-400 font-medium mt-2">
             Por <strong className={isDark ? "text-slate-200" : "text-slate-700"}>{company_name}</strong> • Envio oficial para {company_city || "sua cidade"}
           </p>
         </div>

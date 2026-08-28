@@ -1,7 +1,7 @@
 # Documentação e Memória: Módulo de Instâncias WhatsApp (/sa/instances)
 
-**Data:** 2026-08-25  
-**Versão:** 2026.08.0082  
+**Data:** 2026-08-27  
+**Versão:** 2026.08.0483  
 **Responsável Técnico:** JH7-DESENVOLVEDOR, JH7-DESIGNER, JH7-SECURITY-GUARDIAN, JH7-MESTRE-DOCUMENTACAO  
 
 ---
@@ -10,7 +10,7 @@
 
 O ecossistema Super Admin separou explicitamente o gerenciamento de **Instâncias WhatsApp** (`/sa/instances`) do gerenciamento de **Workers & Background Jobs** (`/sa/workers`).
 
-- **Instâncias WhatsApp (`/sa/instances`):** Responsável pelo controle de conexões com APIs/gateways de WhatsApp (Evolution API / Baileys / WPPConnect), controle de sockets, status de conexão (`connected`, `connecting`, `qrcode`, `disconnected`, `banned`), telemetria de mensagens enviadas e recebidas por tenant, vinculação direta a empresas e respeito estrito aos limites de instâncias contratados no plano/assinatura.
+- **Instâncias WhatsApp (`/sa/instances`):** Responsável pelo controle de conexões com APIs/gateways de WhatsApp (Evolution API / Baileys / WPPConnect), controle de sockets, status de conexão (`connected`, `connecting`, `qrcode`, `disconnected`, `banned`), telemetria de mensagens enviadas e recebidas por tenant, vinculação direta a empresas e respeito estrito aos limites de instâncias contratados no plano/assinatura. Conta com barra de busca, filtros avançados por Empresa e Status e botão dinâmico de **Limpar Filtros** (na barra e no *empty state*).
 - **Workers & Background Jobs (`/sa/workers`):** Focado no monitoramento de filas Redis/BullMQ, rotinas assíncronas, consumo de memória, concorrência e instâncias de processos em background.
 
 ---

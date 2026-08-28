@@ -19,6 +19,7 @@ import {
   ShoppingBag,
   HeartHandshake,
 } from "lucide-react";
+import { getCtaIconComponent, getCtaAnimationClass } from "./ctaOptions";
 
 export interface OfferBoxStyleOption {
   id: string;
@@ -78,6 +79,8 @@ interface OfferBoxProps {
   currentFinalPrice: number;
   formatBRL: (val: number) => string;
   cta_text?: string;
+  cta_icon?: string;
+  cta_animation?: string;
   company_name?: string;
   onBuyClick?: () => void;
   ctaCardRef?: React.RefObject<HTMLDivElement | null>;
@@ -95,10 +98,14 @@ export const OfferBox: React.FC<OfferBoxProps> = ({
   currentFinalPrice,
   formatBRL,
   cta_text,
+  cta_icon,
+  cta_animation,
   company_name = "Dias Imports",
   onBuyClick,
   ctaCardRef,
 }) => {
+  const CtaIconComponent = getCtaIconComponent(cta_icon);
+  const animationClass = getCtaAnimationClass(cta_animation);
   // RENDERIZAÇÃO POR MODELO ESCOLHIDO
 
   // -------------------------------------------------------------
@@ -158,11 +165,11 @@ export const OfferBox: React.FC<OfferBoxProps> = ({
         <button
           type="button"
           onClick={onBuyClick}
-          className="w-full py-3.5 px-5 rounded-xl text-white font-bold text-[14px] flex items-center justify-center gap-2 shadow-sm transition-all duration-200 active:scale-[0.99] cursor-pointer hover:brightness-95 hover:shadow-md"
+          className={`w-full py-3.5 px-5 rounded-xl text-white font-bold text-[14px] flex items-center justify-center gap-2 shadow-sm transition-all duration-200 active:scale-[0.99] cursor-pointer hover:brightness-95 hover:shadow-md ${animationClass}`}
           style={{ backgroundColor: mainColor }}
         >
           <span>{cta_text || "Quero aproveitar agora"}</span>
-          <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+          <CtaIconComponent className="w-4 h-4 shrink-0 stroke-[2.5]" />
         </button>
 
         <div className={`flex items-center justify-center gap-1.5 text-[11px] mt-3 ${isDark ? "text-slate-400" : "text-slate-400"}`}>
@@ -279,11 +286,11 @@ export const OfferBox: React.FC<OfferBoxProps> = ({
           <button
             type="button"
             onClick={onBuyClick}
-            className="w-full py-4 px-5 rounded-2xl text-white font-extrabold text-[15px] flex items-center justify-center gap-2.5 shadow-lg transition-all duration-200 active:scale-[0.99] cursor-pointer hover:brightness-105"
+            className={`w-full py-4 px-5 rounded-2xl text-white font-extrabold text-[15px] flex items-center justify-center gap-2.5 shadow-lg transition-all duration-200 active:scale-[0.99] cursor-pointer hover:brightness-105 ${animationClass}`}
             style={{ backgroundColor: mainColor }}
           >
             <span>{cta_text || "Garantir no Preço Promocional"}</span>
-            <ArrowRight className="w-5 h-5 stroke-[3]" />
+            <CtaIconComponent className="w-5 h-5 shrink-0 stroke-[2.5]" />
           </button>
         </div>
 
@@ -364,10 +371,10 @@ export const OfferBox: React.FC<OfferBoxProps> = ({
         <button
           type="button"
           onClick={onBuyClick}
-          className="w-full py-4 px-5 rounded-xl text-white font-black text-[15px] flex items-center justify-center gap-2 shadow-lg transition-all duration-200 active:scale-[0.99] cursor-pointer hover:brightness-95 uppercase tracking-wide"
+          className={`w-full py-4 px-5 rounded-xl text-white font-black text-[15px] flex items-center justify-center gap-2 shadow-lg transition-all duration-200 active:scale-[0.99] cursor-pointer hover:brightness-95 uppercase tracking-wide ${animationClass}`}
           style={{ backgroundColor: mainColor }}
         >
-          <Zap className="w-4 h-4 fill-current" />
+          <CtaIconComponent className="w-4 h-4 fill-current shrink-0" />
           <span>{cta_text || "Reservar Minha Oferta Agora"}</span>
         </button>
 
@@ -410,11 +417,11 @@ export const OfferBox: React.FC<OfferBoxProps> = ({
 
         <div className="my-4">
           {hasDiscount && (
-            <p className="text-[13px] text-slate-400 line-through mb-1">
+            <p className="text-[13px] text-slate-400 line-through mb-1 font-normal">
               De {formatBRL(price)}
             </p>
           )}
-          <h2 className="text-[38px] sm:text-[42px] font-serif font-black tracking-tight leading-none" style={{ color: mainColor }}>
+          <h2 className="text-[34px] sm:text-[38px] font-bold tracking-tight leading-none" style={{ color: mainColor }}>
             {formatBRL(currentFinalPrice)}
           </h2>
           {hasDiscount && discountAmount > 0 && (
@@ -427,11 +434,11 @@ export const OfferBox: React.FC<OfferBoxProps> = ({
         <button
           type="button"
           onClick={onBuyClick}
-          className="w-full py-4 px-6 rounded-full text-white font-bold text-[14px] flex items-center justify-center gap-2 shadow-md transition-all duration-200 active:scale-[0.98] cursor-pointer hover:opacity-90 tracking-wide"
+          className={`w-full py-4 px-6 rounded-full text-white font-bold text-[14px] flex items-center justify-center gap-2 shadow-md transition-all duration-200 active:scale-[0.98] cursor-pointer hover:opacity-90 tracking-wide ${animationClass}`}
           style={{ backgroundColor: mainColor }}
         >
           <span>{cta_text || "Falar com Consultor no WhatsApp"}</span>
-          <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+          <CtaIconComponent className="w-4 h-4 shrink-0 stroke-[2.5]" />
         </button>
 
         <p className="text-[10.5px] text-slate-400 mt-3 flex items-center justify-center gap-1.5">
@@ -499,10 +506,10 @@ export const OfferBox: React.FC<OfferBoxProps> = ({
         <button
           type="button"
           onClick={onBuyClick}
-          className="w-full py-3.5 px-5 rounded-xl text-white font-bold text-[14px] flex items-center justify-center gap-2 shadow-sm transition-all duration-200 active:scale-[0.99] cursor-pointer hover:brightness-95"
+          className={`w-full py-3.5 px-5 rounded-xl text-white font-bold text-[14px] flex items-center justify-center gap-2 shadow-sm transition-all duration-200 active:scale-[0.99] cursor-pointer hover:brightness-95 ${animationClass}`}
           style={{ backgroundColor: mainColor }}
         >
-          <CreditCard className="w-4 h-4" />
+          <CtaIconComponent className="w-4 h-4 shrink-0" />
           <span>{cta_text || "Pagar com Desconto no WhatsApp"}</span>
         </button>
 
@@ -579,10 +586,10 @@ export const OfferBox: React.FC<OfferBoxProps> = ({
       <button
         type="button"
         onClick={onBuyClick}
-        className="w-full py-3.5 px-5 rounded-xl text-white font-bold text-[14px] flex items-center justify-center gap-2 shadow-sm transition-all duration-200 active:scale-[0.99] cursor-pointer hover:brightness-95"
+        className={`w-full py-3.5 px-5 rounded-xl text-white font-bold text-[14px] flex items-center justify-center gap-2 shadow-sm transition-all duration-200 active:scale-[0.99] cursor-pointer hover:brightness-95 ${animationClass}`}
         style={{ backgroundColor: mainColor }}
       >
-        <HeartHandshake className="w-4 h-4" />
+        <CtaIconComponent className="w-4 h-4 shrink-0" />
         <span>{cta_text || "Chamar no WhatsApp"}</span>
       </button>
 

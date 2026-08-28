@@ -22,14 +22,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "Nenhum arquivo enviado." }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "products");
+    // Whitelist estrita de extensões e tipos MIME para mitigar upload arbitrário
+    const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+    const allowedExtensions = [".jpg", ".jpeg", ".png", ".webp"];
 
+    const rawExt = (path.extname(file.name) || "").toLowerCase();
+    if (!allowedMimeTypes.includes(file.type) || !allowedExtensions.includes(rawExt)) {
+      return NextResponse.json(
+        { success: false, message: "Tipo de arquivo não permitido. Envie apenas imagens JPG, PNG ou WEBP." },
+        { status: 400 }
+      );
+    }
+
+    // Validação de tamanho máximo (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      return NextResponse.json(
+        { success: false, message: "A imagem não pode ultrapassar 5MB." },
+        { status: 400 }
+      );
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    // Validação básica de Magic Bytes
+    const isJpeg = buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
+    const isWebp = buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP";
+
+    if (!isJpeg && !isPng && !isWebp) {
+      return NextResponse.json(
+        { success: false, message: "Arquivo corrompido ou formato de imagem inválido." },
+        { status: 400 }
+      );
+    }
+
+    const uploadDir = path.join(process.cwd(), "public", "uploads", "products");
     await mkdir(uploadDir, { recursive: true });
 
-    const rawExt = path.extname(file.name) || ".webp";
-    const ext = rawExt.toLowerCase() === ".webp" || !rawExt ? ".webp" : rawExt;
-    const filename = `prod_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${ext}`;
+    const safeExt = isWebp ? ".webp" : isPng ? ".png" : ".jpg";
+    const filename = `prod_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${safeExt}`;
     const filePath = path.join(uploadDir, filename);
 
     await writeFile(filePath, buffer);

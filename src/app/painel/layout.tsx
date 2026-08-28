@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LayoutProvider } from "@/context/LayoutContext";
+import { DesktopOnlyGuard } from "@/components/ui/DesktopOnlyGuard";
 
 export const metadata: Metadata = {
   title: "Painel do Cliente | JH7 Marketing",
@@ -12,8 +13,10 @@ export default function PainelLayout({
   children: React.ReactNode;
 }) {
   return (
-    <LayoutProvider>
-      {children}
-    </LayoutProvider>
+    <DesktopOnlyGuard systemName="Painel do Cliente JH7" minWidth={1200}>
+      <LayoutProvider>
+        {children}
+      </LayoutProvider>
+    </DesktopOnlyGuard>
   );
 }

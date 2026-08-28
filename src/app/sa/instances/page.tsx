@@ -13,6 +13,7 @@ import {
   RotateCw,
   X,
   AlertTriangle,
+  XCircle,
 } from "lucide-react";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 import { maskPhone } from "@/lib/validators";
@@ -231,6 +232,19 @@ export default function InstancesPage() {
     (i) => i.status === "disconnected" || i.status === "banned"
   ).length;
 
+  const hasActiveFilters = Boolean(
+    searchTerm.trim() !== "" ||
+    statusFilter !== "all" ||
+    companyFilter !== "all"
+  );
+
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setCompanyFilter("all");
+    setCurrentPage(1);
+  };
+
   return (
     <div className="space-y-6">
       {/* 1. CABEÇALHO PADRÃO DO SISTEMA */}
@@ -361,6 +375,19 @@ export default function InstancesPage() {
               <option value="banned" className="bg-slate-900 text-slate-200">Banidas</option>
             </select>
           </div>
+
+          {/* Botão Limpar Filtros */}
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white text-xs font-medium border border-slate-700/70 hover:border-slate-600 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0"
+              title="Limpar todos os filtros"
+            >
+              <XCircle className="w-3.5 h-3.5 text-rose-400" />
+              <span>Limpar Filtros</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -377,11 +404,25 @@ export default function InstancesPage() {
               <Server className="w-7 h-7" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">Nenhuma instância encontrada</h3>
+              <h3 className="text-base font-bold text-white">
+                {hasActiveFilters ? "Nenhuma instância encontrada para os filtros aplicados" : "Nenhuma instância encontrada"}
+              </h3>
               <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                As instâncias do WhatsApp são criadas e vinculadas exclusivamente através do cadastro da empresa.
+                {hasActiveFilters
+                  ? "Tente ajustar ou limpar seus critérios de pesquisa para visualizar as instâncias."
+                  : "As instâncias do WhatsApp são criadas e vinculadas exclusivamente através do cadastro da empresa."}
               </p>
             </div>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-all cursor-pointer shadow-sm active:scale-95"
+              >
+                <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                <span>Limpar Filtros</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="w-full">

@@ -85,6 +85,7 @@ export const Modelo1Template: React.FC<TemplateProductProps> = ({
   cta_text = "Quero aproveitar agora",
   cta_icon = "arrow-right",
   cta_animation = "none",
+  headline,
   benefits,
   benefits_icon = "check",
   offer_box_style = "model_1",
@@ -258,10 +259,21 @@ export const Modelo1Template: React.FC<TemplateProductProps> = ({
         {/* 2. HEADLINE PRINCIPAL (NOME DO PRODUTO) */}
         <h1
           style={titleFontStyle}
-          className={`text-center ${isInsideMockup ? "text-[22px]" : "text-[26px] sm:text-[28px]"} font-black tracking-tight ${isDark ? "text-white" : "text-slate-950"} uppercase leading-snug px-1`}
+          className={`text-center ${isInsideMockup ? "text-[21px]" : "text-[25px] sm:text-[27px]"} font-bold tracking-normal ${isDark ? "text-white" : "text-slate-950"} leading-snug px-1`}
         >
           {name || "Produto Sem Nome"}
         </h1>
+
+        {/* 2.1 SUB-HEADLINE / COPY DE ALTA CONVERSÃO */}
+        {headline ? (
+          <p
+            className={`text-center text-xs sm:text-sm font-medium mt-2 max-w-[95%] leading-relaxed ${
+              isDark ? "text-slate-300" : "text-slate-600"
+            }`}
+          >
+            {headline}
+          </p>
+        ) : null}
 
         {/* 3. DETALHE HORIZONTAL */}
         <div
@@ -415,7 +427,7 @@ export const Modelo1Template: React.FC<TemplateProductProps> = ({
         {/* 8. SEÇÃO "SOBRE O PRODUTO" */}
         {description && (
           <div className="w-full text-left mb-6 px-1">
-            <h2 className={`font-serif text-[17px] font-bold mb-2 ${isDark ? "text-white" : "text-slate-950"}`}>
+            <h2 style={titleFontStyle} className={`text-[16px] font-bold tracking-tight mb-2 ${isDark ? "text-white" : "text-slate-950"}`}>
               Sobre o produto
             </h2>
             <div className={`text-[13px] leading-relaxed whitespace-pre-line space-y-2 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
@@ -446,7 +458,7 @@ export const Modelo1Template: React.FC<TemplateProductProps> = ({
 
         {/* 10. SEÇÃO "ANTES DE FECHAR" / FAQ ACCORDION */}
         <div className="w-full text-left mb-6">
-          <h2 className={`font-serif text-[17px] font-bold mb-3 px-1 ${isDark ? "text-white" : "text-slate-950"}`}>
+          <h2 style={titleFontStyle} className={`text-[16px] font-bold tracking-tight mb-3 px-1 ${isDark ? "text-white" : "text-slate-950"}`}>
             Antes de fechar
           </h2>
 
@@ -497,7 +509,7 @@ export const Modelo1Template: React.FC<TemplateProductProps> = ({
             isDark ? "bg-slate-900 border-slate-800 shadow-[0_10px_30px_rgba(0,0,0,0.4)]" : "bg-white border-[#EDE7EC] shadow-[0_10px_30px_rgba(40,15,30,0.04)]"
           }`}
         >
-          <h3 className={`font-serif text-[16px] font-bold mb-3 text-left ${isDark ? "text-white" : "text-slate-950"}`}>
+          <h3 style={titleFontStyle} className={`text-[16px] font-bold mb-3 text-left ${isDark ? "text-white" : "text-slate-950"}`}>
             Fechar pedido pelo WhatsApp
           </h3>
 

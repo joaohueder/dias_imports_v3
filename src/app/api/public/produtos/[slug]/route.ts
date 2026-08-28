@@ -15,7 +15,8 @@ export async function GET(
     // Incrementa visualização e busca produto ativo
     const isId = /^\d+$/.test(slug);
     let query = `
-      SELECT p.*, c.name as company_name, c.whatsapp as company_whatsapp, c.admin_whatsapp as company_admin_whatsapp, c.phone as company_phone
+      SELECT p.*, c.name as company_name, c.whatsapp as company_whatsapp, c.admin_whatsapp as company_admin_whatsapp, c.phone as company_phone,
+             c.meta_pixel_id, c.meta_pixel_active
       FROM company_products p
       JOIN companies c ON c.id = p.company_id
       WHERE ${isId ? "p.id = ?" : "p.slug = ?"} AND p.status = 'active'
@@ -29,9 +30,48 @@ export async function GET(
     }
 
     const product = rows[0];
+    const companyId = product.company_id;
 
-    // Incrementar views de forma assíncrona
-    pool.query(`UPDATE company_products SET views_count = views_count + 1 WHERE id = ?`, [product.id]).catch(() => {});
+    // Verificar se o limite de visualizações do plano/assinatura da empresa foi atingido
+    const [subRows] = await pool.query<RowDataPacket[]>(
+      `SELECT s.id, s.plan_snapshot_max_views, p.max_views as plan_max_views
+       FROM subscriptions s
+       LEFT JOIN plans p ON s.plan_id = p.id
+       WHERE s.company_id = ? AND s.status = 'active'
+       ORDER BY s.id DESC
+       LIMIT 1`,
+      [companyId]
+    );
+
+    const activeSub = subRows[0] || null;
+    const limitViews = activeSub
+      ? Number(activeSub.plan_snapshot_max_views ?? activeSub.plan_max_views ?? 0)
+      : 0;
+
+    if (limitViews > 0) {
+      const [viewsSumRows] = await pool.query<RowDataPacket[]>(
+        `SELECT SUM(views_count) as total_views FROM company_products WHERE company_id = ?`,
+        [companyId]
+      );
+      const totalViews = Number(viewsSumRows[0]?.total_views || 0);
+
+      if (totalViews >= limitViews) {
+        return NextResponse.json(
+          {
+            success: false,
+            limited_view: true,
+            error_code: "LIMITED_VIEW",
+            message: "No momento este produto não está disponível.",
+            company_name: product.company_name,
+            target_whatsapp: (product.company_whatsapp || product.company_admin_whatsapp || product.company_phone || "").replace(/\D/g, ""),
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Incrementar views e registrar timestamp do último acesso
+    pool.query(`UPDATE company_products SET views_count = views_count + 1, last_accessed_at = NOW() WHERE id = ?`, [product.id]).catch(() => {});
 
     let images = [];
     let benefits = [];
@@ -78,6 +118,8 @@ export async function GET(
         external_link: product.external_link,
         company_name: product.company_name,
         target_whatsapp: targetPhone.replace(/\D/g, ""),
+        meta_pixel_id: Boolean(product.meta_pixel_active) && product.meta_pixel_id ? product.meta_pixel_id : null,
+        meta_pixel_active: Boolean(product.meta_pixel_active),
       },
     });
   } catch (error: any) {

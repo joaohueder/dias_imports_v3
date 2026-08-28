@@ -32,6 +32,39 @@ export async function POST(request: NextRequest) {
 
     const pool = getDbPool();
 
+    // 0. Validação de limite de grupos da assinatura ativa
+    const [subRows] = await pool.query<RowDataPacket[]>(
+      `SELECT s.id, s.plan_snapshot_max_groups, p.max_groups as plan_max_groups
+       FROM subscriptions s
+       LEFT JOIN plans p ON s.plan_id = p.id
+       WHERE s.company_id = ? AND s.status = 'active'
+       ORDER BY s.id DESC
+       LIMIT 1`,
+      [companyId]
+    );
+
+    const activeSub = subRows[0] || null;
+    const limitGroups = activeSub
+      ? Number(activeSub.plan_snapshot_max_groups ?? activeSub.plan_max_groups ?? 10)
+      : 10;
+
+    const [currentCountRows] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) as total FROM company_whatsapp_groups WHERE company_id = ?`,
+      [companyId]
+    );
+    const currentGroupCount = Number(currentCountRows[0]?.total || 0);
+
+    if (limitGroups > 0 && currentGroupCount >= limitGroups) {
+      return NextResponse.json(
+        {
+          success: false,
+          limit_reached: true,
+          message: `Limite de grupos atingido (${currentGroupCount}/${limitGroups}). Faça um upgrade do seu plano para cadastrar mais grupos!`,
+        },
+        { status: 403 }
+      );
+    }
+
     // 1. Obter grupos existentes para evitar duplicação pelo JID (whatsapp_group_id)
     const [existingRows] = await pool.query<RowDataPacket[]>(
       `SELECT whatsapp_group_id FROM company_whatsapp_groups WHERE company_id = ?`,
@@ -56,6 +89,11 @@ export async function POST(request: NextRequest) {
         // Atualiza grupo existente para active se necessário ou pula
         skippedCount++;
         continue;
+      }
+
+      // Impede ultrapassar o limite durante a inserção em lote
+      if (limitGroups > 0 && currentGroupCount + insertedCount >= limitGroups) {
+        break;
       }
 
       const [insertRes] = await pool.query<ResultSetHeader>(
@@ -88,7 +126,7 @@ export async function POST(request: NextRequest) {
       try {
         const { enqueueJob } = await import("@/lib/jobs-engine");
         await enqueueJob(
-          "evolution-webhook-sync",
+          "whatsapp-groups-sync",
           `sync_group_${jid || newGroupId}`,
           {
             company_id: companyId,

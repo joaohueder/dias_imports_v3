@@ -38,6 +38,15 @@ import {
   Flame,
   Zap,
   Type,
+  Crown,
+  LockKeyhole,
+  TrendingUp,
+  Clock,
+  Radio,
+  Calendar,
+  RefreshCw,
+  Users2,
+  History as HistoryIcon,
 } from "lucide-react";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 import { Modelo1Template } from "@/components/landing-templates/Modelo1Template";
@@ -48,6 +57,8 @@ import { getBenefitIconComponent, BENEFIT_ICONS } from "@/components/landing-tem
 import { CtaIconPickerModal } from "@/components/landing-templates/CtaIconPickerModal";
 import { getCtaIconComponent, CTA_ANIMATIONS } from "@/components/landing-templates/ctaOptions";
 import { FONT_OPTIONS } from "@/components/landing-templates/fontOptions";
+import { SendProductModal } from "@/components/painel/SendProductModal";
+import { HeadlinePickerModal } from "@/components/landing-templates/HeadlinePickerModal";
 import { useLayout } from "@/context/LayoutContext";
 import { PainelLayoutClient } from "@/components/painel/PainelLayoutClient";
 import { FloatingActionBar } from "@/components/ui/FloatingActionBar";
@@ -86,9 +97,6 @@ const TEMPLATES = [
   { id: "default", name: "Fashion Clean (Conversão)", desc: "Estilo catálogo premium e minimalista, com galeria deslizante com gestos, ofertas dinâmicas, FAQ e CTA inteligente.", badge: "Padrão" },
   { id: "model_2", name: "Oferta Direta & Escassez", desc: "Focado em conversão agressiva, barra de urgência com cronômetro, prova social ao vivo, selos de segurança e CTA de alto impacto.", badge: "Alta Conversão" },
   { id: "model_3", name: "Alta Autoridade & Prova Social", desc: "Selo VIP de produto selecionado, reviews e avaliações 5 estrelas reais, 3 pilares de confiança e reforço duplo de CTA.", badge: "Top Conversão" },
-  { id: "model_4", name: "Modelo em Construção 4", desc: "Esse modelo está em construção", badge: "Em Breve" },
-  { id: "model_5", name: "Modelo em Construção 5", desc: "Esse modelo está em construção", badge: "Em Breve" },
-  { id: "model_6", name: "Modelo em Construção 6", desc: "Esse modelo está em construção", badge: "Em Breve" },
 ];
 
 const COLOR_PALETTES = [
@@ -143,6 +151,12 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
   const [isCropperOpen, setIsCropperOpen] = useState(false);
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
   const [isCtaIconPickerOpen, setIsCtaIconPickerOpen] = useState(false);
+  const [isHeadlinePickerOpen, setIsHeadlinePickerOpen] = useState(false);
+  const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+
+  // Verificação de limites de plano para novos produtos
+  const [limitReached, setLimitReached] = useState(false);
+  const [limitInfo, setLimitInfo] = useState<{ current: number; max: number } | null>(null);
 
   const [formData, setFormData] = useState<ProductFormData>({
     name: "",
@@ -156,7 +170,7 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
     layout_template: "default",
     layout_color: "#6366f1",
     layout_theme: "dark",
-    layout_font: "sans_modern",
+    layout_font: "plusjakarta_inter",
     benefits_icon: "check",
     offer_box_style: "model_1",
     cta_text: "Comprar no WhatsApp",
@@ -171,6 +185,53 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
     ],
     external_link: "",
   });
+
+  const [detailedStats, setDetailedStats] = useState<any>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
+
+  const fetchDetailedStats = async () => {
+    if (!productId) return;
+    try {
+      setLoadingStats(true);
+      const res = await fetch(`/api/painel/produtos/${productId}/estatisticas`);
+      const data = await res.json();
+      if (data.success) {
+        setDetailedStats(data);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar estatísticas detalhadas:", err);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  // Buscar estatísticas detalhadas ao trocar para a aba de estatísticas
+  useEffect(() => {
+    if (activeTab === 4 && productId) {
+      fetchDetailedStats();
+    }
+  }, [activeTab, productId]);
+
+  // Carregar métricas de limite de produtos se for novo cadastro
+  useEffect(() => {
+    if (isEditing) return;
+    const checkProductLimit = async () => {
+      try {
+        const res = await fetch("/api/painel/produtos");
+        const data = await res.json();
+        if (data.success && data.metrics) {
+          const { total_products, limit_products } = data.metrics;
+          if (limit_products > 0 && total_products >= limit_products) {
+            setLimitReached(true);
+            setLimitInfo({ current: total_products, max: limit_products });
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao verificar limite de produtos:", err);
+      }
+    };
+    checkProductLimit();
+  }, [isEditing]);
 
   // Carregar dados se for edição
   useEffect(() => {
@@ -215,6 +276,7 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
             views_count: Number(p.views_count) || 0,
             clicks_count: Number(p.clicks_count) || 0,
           });
+          fetchDetailedStats();
         } else {
           showError(data.message || "Erro ao carregar produto.", "Produto não encontrado");
           router.push("/painel/produtos");
@@ -322,6 +384,14 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
   };
 
   const handleSave = async () => {
+    if (!isEditing && limitReached) {
+      showError(
+        "Você atingiu o limite de produtos do seu plano. Faça um upgrade para cadastrar novos itens.",
+        "Limite de Produtos Atingido"
+      );
+      return;
+    }
+
     const rawPrice = parseCurrencyToNumber(formData.price);
     const rawPromoPrice = parseCurrencyToNumber(formData.promo_price);
 
@@ -377,11 +447,58 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
   };
 
   const parsedPriceNumber = parseFloat(parseCurrencyToNumber(formData.price));
-  const isFormValid = Boolean(formData.name.trim() && !isNaN(parsedPriceNumber) && parsedPriceNumber > 0);
+  const isFormValid = Boolean(
+    !limitReached &&
+    formData.name.trim() &&
+    !isNaN(parsedPriceNumber) &&
+    parsedPriceNumber > 0
+  );
 
   return (
     <PainelLayoutClient>
       <div className="w-full space-y-6">
+        {/* Banner Piscante e Estratégico de Limite Atingido */}
+        {!isEditing && limitReached && (
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-950/90 via-rose-950/90 to-purple-950/90 border-2 border-amber-500/80 shadow-[0_0_30px_rgba(245,158,11,0.3)] animate-pulse p-4 sm:p-5">
+            <div className="absolute -top-12 -right-12 w-36 h-36 bg-amber-500/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-12 -left-12 w-36 h-36 bg-rose-500/20 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-rose-600 flex items-center justify-center text-white shadow-lg shadow-amber-500/30 shrink-0">
+                  <Crown className="w-6 h-6 animate-bounce" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500 text-slate-950">
+                      Limite Atingido
+                    </span>
+                    <span className="text-xs font-bold text-amber-300">
+                      {limitInfo?.current} de {limitInfo?.max} produtos cadastrados
+                    </span>
+                  </div>
+                  <h2 className="text-base sm:text-lg font-black text-white mt-1">
+                    Sua empresa está crescendo! Desbloqueie todo o potencial do seu catálogo.
+                  </h2>
+                  <p className="text-xs text-amber-200/80 mt-0.5 leading-relaxed">
+                    Você atingiu o limite de produtos do seu plano atual. Faça o upgrade agora para cadastrar produtos ilimitados, aumentar suas visualizações e multiplicar suas vendas no WhatsApp.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0 w-full md:w-auto">
+                <Link
+                  href="/painel/configuracoes/assinatura?tab=upgrade"
+                  className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 shadow-lg shadow-rose-600/30 transition-all hover:scale-105 active:scale-95 text-center cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Fazer Upgrade de Plano</span>
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Top Header com Botão Voltar */}
         <div className="flex items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
           <div className="flex items-center gap-3">
@@ -396,6 +513,17 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
               {isEditing ? "Editar Produto" : "Novo Produto"}
             </h1>
           </div>
+
+          {isEditing && (
+            <button
+              type="button"
+              onClick={() => setIsSendModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-slate-950 bg-emerald-400 hover:bg-emerald-300 transition-all cursor-pointer shadow-md shadow-emerald-950/40"
+            >
+              <Send className="w-3.5 h-3.5" />
+              Enviar Oferta
+            </button>
+          )}
         </div>
 
         {/* Stepper / Tabs Bar (Apenas exibido quando em edição ou com múltiplas abas ativas) */}
@@ -502,7 +630,7 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
               </div>
 
               {/* GRUPO 2: TIPOGRAFIA E FONTES */}
-              <div className="border-t border-slate-800/80 pt-5 space-y-3">
+              <div className="border-t border-slate-800/80 pt-4 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -515,24 +643,24 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
                   {FONT_OPTIONS.map((fnt) => {
-                    const isSelected = (formData.layout_font || "sans_modern") === fnt.id;
+                    const isSelected = (formData.layout_font || "plusjakarta_inter") === fnt.id || (formData.layout_font === "sans_modern" && fnt.id === "plusjakarta_inter");
                     return (
                       <div
                         key={fnt.id}
                         onClick={() => handleChange("layout_font", fnt.id)}
-                        className={`p-3.5 rounded-xl border transition-all cursor-pointer relative flex flex-col justify-between text-left overflow-hidden ${
+                        className={`p-3 rounded-xl border transition-all cursor-pointer relative flex flex-col justify-between text-left overflow-hidden group ${
                           isSelected
-                            ? "bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-500/30 shadow-md shadow-indigo-950/50"
-                            : "bg-slate-900/80 border-slate-800 hover:border-slate-700 hover:bg-slate-800/50"
+                            ? "bg-indigo-950/50 border-indigo-500 ring-1 ring-indigo-500/50 shadow-md shadow-indigo-950/50"
+                            : "bg-slate-900/70 border-slate-800/80 hover:border-slate-700 hover:bg-slate-800/40"
                         }`}
                       >
-                        <div className="space-y-2.5">
+                        <div className="space-y-2">
                           {/* Linha superior: Badge e Check */}
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between gap-1">
                             <span
-                              className={`text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                              className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider truncate max-w-[130px] ${
                                 isSelected
                                   ? "bg-indigo-500/25 text-indigo-300 border border-indigo-500/40"
                                   : "bg-slate-800/90 text-slate-400 border border-slate-700/60"
@@ -541,42 +669,37 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
                               {fnt.badge}
                             </span>
                             {isSelected && (
-                              <span className="flex items-center gap-1 text-[10px] font-bold text-indigo-400">
-                                <Check className="w-3 h-3 text-indigo-400" />
+                              <span className="flex items-center gap-0.5 text-[10px] font-bold text-indigo-400 shrink-0">
+                                <Check className="w-3.5 h-3.5 text-indigo-400" />
                               </span>
                             )}
                           </div>
 
-                          {/* Preview visual da fonte (Título + Botão/Texto) */}
-                          <div className="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/60 text-slate-200 text-center select-none flex flex-col items-center justify-center gap-1 min-h-[58px]">
+                          {/* Preview visual compacto da fonte */}
+                          <div className="px-2.5 py-2 rounded-lg bg-slate-950/70 border border-slate-800/60 text-slate-200 text-center select-none flex flex-col items-center justify-center gap-1 min-h-[48px]">
                             <span
-                              className="text-[13px] font-extrabold tracking-tight leading-tight block truncate w-full"
+                              className="text-xs font-bold tracking-tight leading-tight block truncate w-full"
                               style={{ fontFamily: fnt.titleFont }}
                             >
                               {fnt.sampleText}
                             </span>
                             <span
-                              className="text-[10px] text-indigo-300 font-semibold uppercase tracking-wider block"
+                              className="text-[9px] text-indigo-300/90 font-medium tracking-wide block truncate w-full"
                               style={{ fontFamily: fnt.bodyFont }}
                             >
-                              Títulos: {fnt.titleFont.split(",")[0].replace(/'/g, "")} • Textos: {fnt.bodyFont.split(",")[0].replace(/'/g, "")}
+                              {fnt.name}
                             </span>
                           </div>
 
-                          {/* Título e descrição */}
-                          <div>
-                            <h4 className="text-xs font-bold text-white leading-tight">
-                              {fnt.name}
-                            </h4>
-                            <p className="text-[11px] text-slate-400 leading-snug mt-1">
-                              {fnt.desc}
-                            </p>
-                          </div>
+                          {/* Nome e Categoria rápida */}
+                          <p className="text-[10.5px] text-slate-400 leading-tight truncate">
+                            {fnt.category}
+                          </p>
                         </div>
 
-                        <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px]">
-                          <span className={isSelected ? "text-indigo-300 font-semibold" : "text-slate-500"}>
-                            {isSelected ? "Em uso" : "Clique para usar"}
+                        <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[9.5px]">
+                          <span className={isSelected ? "text-indigo-300 font-semibold" : "text-slate-500 group-hover:text-slate-400"}>
+                            {isSelected ? "Selecionada" : "Selecionar"}
                           </span>
                         </div>
                       </div>
@@ -1028,6 +1151,7 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
                         cta_text={formData.cta_text || "Quero Garantir Com Desconto"}
                         cta_icon={formData.cta_icon || "flame"}
                         cta_animation={formData.cta_animation || "pulse"}
+                        headline={formData.headline}
                         benefits={formData.benefits}
                         benefits_icon={formData.benefits_icon || "check"}
                         offer_box_style={formData.offer_box_style || "model_1"}
@@ -1050,6 +1174,7 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
                         cta_text={formData.cta_text || "Garantir Oferta Exclusiva"}
                         cta_icon={formData.cta_icon || "zap"}
                         cta_animation={formData.cta_animation || "pulse"}
+                        headline={formData.headline}
                         benefits={formData.benefits}
                         benefits_icon={formData.benefits_icon || "check"}
                         offer_box_style={formData.offer_box_style || "model_1"}
@@ -1072,6 +1197,7 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
                         cta_text={formData.cta_text || "Quero aproveitar agora"}
                         cta_icon={formData.cta_icon || "arrow-right"}
                         cta_animation={formData.cta_animation || "none"}
+                        headline={formData.headline}
                         benefits={formData.benefits}
                         benefits_icon={formData.benefits_icon || "check"}
                         offer_box_style={formData.offer_box_style || "model_1"}
@@ -1109,11 +1235,11 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
                     Descrição Completa *
                   </label>
                   <textarea
-                    rows={4}
+                    rows={8}
                     placeholder="O que o cliente precisa saber sobre este produto..."
                     value={formData.description}
                     onChange={(e) => handleChange("description", e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 resize-y"
                   />
                 </div>
 
@@ -1154,6 +1280,50 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
                         className="w-full pl-9 pr-3.5 py-2.5 text-xs rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 font-mono"
                       />
                     </div>
+                  </div>
+                </div>
+
+                {/* BLOCO DE HEADLINE / CHAMADA DE ALTA CONVERSÃO */}
+                <div className="border-t border-slate-800/80 pt-4 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                        Headline / Chamada Principal (Opcional)
+                      </label>
+                      <p className="text-[11px] text-slate-400">
+                        Utilizada na landing page e na variável <code className="text-amber-400 font-mono text-[10px] bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">{"{headline}"}</code> dos disparos de WhatsApp.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsHeadlinePickerOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:text-amber-200 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 self-start sm:self-auto shrink-0 whitespace-nowrap"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>50 Modelos de Alta Conversão</span>
+                    </button>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Ex: ⚡ OFERTA RELÂMPAGO: Válida somente enquanto durarem os estoques!"
+                      value={formData.headline}
+                      onChange={(e) => handleChange("headline", e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50"
+                    />
+                    {formData.headline && (
+                      <button
+                        type="button"
+                        onClick={() => handleChange("headline", "")}
+                        title="Limpar headline"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-1 text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1276,28 +1446,64 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
               </div>
             )}
 
-            {/* ABA 4: ESTATÍSTICAS */}
+            {/* ABA 4: ESTATÍSTICAS COMPLETAS DO PRODUTO */}
             {activeTab === 4 && (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="bg-slate-900/90 border border-slate-800/90 p-4 rounded-2xl">
+                {/* Header das Estatísticas com Botão de Atualizar e Link do Produto */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
+                  <div>
+                    <h3 className="text-sm font-black text-white flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 text-indigo-400" />
+                      Desempenho & Métricas de Conversão
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Acompanhe em tempo real os disparos nos grupos, visualizações na página e cliques de venda no WhatsApp.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={fetchDetailedStats}
+                      disabled={loadingStats}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-700 cursor-pointer disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${loadingStats ? "animate-spin" : ""}`} />
+                      <span>Atualizar</span>
+                    </button>
+                    {formData.slug && (
+                      <a
+                        href={`/p/${formData.slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Abrir Landing Page</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {/* Grid com Cards Principais */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-slate-900/90 border border-slate-800/90 p-4 rounded-2xl relative overflow-hidden">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-400">Total de Envios</span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total de Envios</span>
                       <div className="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
                         <Send className="w-4 h-4" />
                       </div>
                     </div>
                     <div className="text-2xl font-black text-white mt-2">
-                      {formData.sends_count ?? 0}
+                      {detailedStats?.stats?.total_dispatches ?? (formData.sends_count ?? 0)}
                     </div>
                     <span className="text-[11px] text-slate-500 mt-1 block">
-                      Disparos para grupos de WhatsApp
+                      Disparos enviados para grupos
                     </span>
                   </div>
 
-                  <div className="bg-slate-900/90 border border-slate-800/90 p-4 rounded-2xl">
+                  <div className="bg-slate-900/90 border border-slate-800/90 p-4 rounded-2xl relative overflow-hidden">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-400">Visualizações</span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Visualizações</span>
                       <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
                         <Eye className="w-4 h-4" />
                       </div>
@@ -1310,9 +1516,9 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
                     </span>
                   </div>
 
-                  <div className="bg-slate-900/90 border border-slate-800/90 p-4 rounded-2xl">
+                  <div className="bg-slate-900/90 border border-slate-800/90 p-4 rounded-2xl relative overflow-hidden">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-400">Cliques no WhatsApp</span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Cliques no WhatsApp</span>
                       <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
                         <MousePointerClick className="w-4 h-4" />
                       </div>
@@ -1321,23 +1527,189 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
                       {formData.clicks_count ?? 0}
                     </div>
                     <span className="text-[11px] text-slate-500 mt-1 block">
-                      Cliques de conversão direta no WhatsApp
+                      Cliques de conversão no botão
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-900/90 border border-slate-800/90 p-4 rounded-2xl relative overflow-hidden">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Taxa de Conversão</span>
+                      <div className="w-8 h-8 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+                        <TrendingUp className="w-4 h-4" />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-black text-violet-300 mt-2">
+                      {formData.views_count && formData.views_count > 0
+                        ? `${(((formData.clicks_count || 0) / formData.views_count) * 100).toFixed(1)}%`
+                        : "0.0%"}
+                    </div>
+                    <span className="text-[11px] text-slate-500 mt-1 block">
+                      Visitantes convertidos em lead
                     </span>
                   </div>
                 </div>
 
-                {/* Taxa de Conversão */}
-                <div className="p-4 rounded-2xl bg-indigo-950/20 border border-indigo-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-xs font-bold text-indigo-300">Taxa de Conversão de Cliques</h4>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Proporção de visitantes da página que clicaram para conversar no WhatsApp.
-                    </p>
+                {/* Painel do Funil de Conversão */}
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900/90 to-indigo-950/30 border border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-amber-400" />
+                      Funil de Vendas do Produto
+                    </h4>
+                    <span className="text-[11px] text-slate-400">Fluxo da Oferta no WhatsApp</span>
                   </div>
-                  <div className="text-xl font-black text-indigo-400">
-                    {formData.views_count && formData.views_count > 0
-                      ? `${(((formData.clicks_count || 0) / formData.views_count) * 100).toFixed(1)}%`
-                      : "0.0%"}
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                    {/* Etapa 1: Disparo */}
+                    <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                      <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                        <span className="font-semibold">1. Disparos Realizados</span>
+                        <span className="font-mono text-indigo-400 font-bold">100%</span>
+                      </div>
+                      <div className="text-lg font-black text-white">
+                        {detailedStats?.stats?.total_dispatches ?? (formData.sends_count ?? 0)}
+                      </div>
+                      <div className="w-full bg-slate-800 h-2 rounded-full mt-2 overflow-hidden">
+                        <div className="bg-indigo-500 h-full rounded-full w-full" />
+                      </div>
+                    </div>
+
+                    {/* Etapa 2: Acesso */}
+                    <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                      <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                        <span className="font-semibold">2. Acessos na Oferta</span>
+                        <span className="font-mono text-emerald-400 font-bold">
+                          {detailedStats?.stats?.total_dispatches && detailedStats.stats.total_dispatches > 0
+                            ? `${(((formData.views_count || 0) / detailedStats.stats.total_dispatches) * 100).toFixed(0)}%`
+                            : "-"}
+                        </span>
+                      </div>
+                      <div className="text-lg font-black text-white">{formData.views_count ?? 0}</div>
+                      <div className="w-full bg-slate-800 h-2 rounded-full mt-2 overflow-hidden">
+                        <div
+                          className="bg-emerald-500 h-full rounded-full"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              detailedStats?.stats?.total_dispatches && detailedStats.stats.total_dispatches > 0
+                                ? ((formData.views_count || 0) / detailedStats.stats.total_dispatches) * 100
+                                : 0
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Etapa 3: Conversão */}
+                    <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                      <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                        <span className="font-semibold">3. Cliques WhatsApp</span>
+                        <span className="font-mono text-amber-400 font-bold">
+                          {formData.views_count && formData.views_count > 0
+                            ? `${(((formData.clicks_count || 0) / formData.views_count) * 100).toFixed(1)}%`
+                            : "0.0%"}
+                        </span>
+                      </div>
+                      <div className="text-lg font-black text-white">{formData.clicks_count ?? 0}</div>
+                      <div className="w-full bg-slate-800 h-2 rounded-full mt-2 overflow-hidden">
+                        <div
+                          className="bg-amber-500 h-full rounded-full"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              formData.views_count && formData.views_count > 0
+                                ? ((formData.clicks_count || 0) / formData.views_count) * 100
+                                : 0
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Histórico Recente de Disparos deste Produto */}
+                <div className="rounded-2xl bg-slate-900/60 border border-slate-800 overflow-hidden">
+                  <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <HistoryIcon className="w-4 h-4 text-teal-400" />
+                        Histórico Recente de Envios para Grupos
+                      </h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Últimos disparos enfileirados e processados para este produto.
+                      </p>
+                    </div>
+                    {detailedStats?.stats && (
+                      <div className="flex items-center gap-2 text-[11px] font-bold">
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          {detailedStats.stats.completed_dispatches} Entregues
+                        </span>
+                        {detailedStats.stats.failed_dispatches > 0 && (
+                          <span className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                            {detailedStats.stats.failed_dispatches} Falhas
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-950/80 text-slate-400 font-bold uppercase text-[10px] tracking-wider border-b border-slate-800">
+                        <tr>
+                          <th className="py-3 px-4">Grupo de Destino</th>
+                          <th className="py-3 px-4">Modelo Utilizado</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4">Tentativas</th>
+                          <th className="py-3 px-4">Data do Envio</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {!detailedStats?.recentJobs || detailedStats.recentJobs.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="py-8 text-center text-slate-500">
+                              Nenhum envio recente registrado para este produto.
+                            </td>
+                          </tr>
+                        ) : (
+                          detailedStats.recentJobs.map((job: any) => (
+                            <tr key={job.id} className="hover:bg-slate-800/30 transition-colors">
+                              <td className="py-3 px-4 font-bold text-white">
+                                <div className="flex items-center gap-2">
+                                  <Users2 className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                  <span className="truncate max-w-[200px]">{job.group_name || "Grupo WhatsApp"}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-4 text-slate-300">
+                                {job.template_title || "Modelo Padrão"}
+                              </td>
+                              <td className="py-3 px-4">
+                                {job.status === "completed" ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                    Enviado
+                                  </span>
+                                ) : job.status === "failed" ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-rose-500/15 text-rose-400 border border-rose-500/30" title={job.error_message}>
+                                    Falhou
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                    Na Fila
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-4 font-mono text-slate-300">
+                                {job.attempts || 1}
+                              </td>
+                              <td className="py-3 px-4 font-mono text-slate-400">
+                                {new Date(job.created_at).toLocaleString("pt-BR")}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
@@ -1386,6 +1758,40 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
             handleChange("cta_icon", newIconId);
           }}
         />
+
+        {/* Modal Seletor de Headline de Alta Conversão */}
+        <HeadlinePickerModal
+          isOpen={isHeadlinePickerOpen}
+          onClose={() => setIsHeadlinePickerOpen(false)}
+          selectedHeadlineText={formData.headline || ""}
+          onSelectHeadline={(headlineText) => {
+            handleChange("headline", headlineText);
+          }}
+        />
+
+        {/* Modal de Disparo de Campanha com Escolha de Modelos e Grupos */}
+        {isEditing && productId && (
+          <SendProductModal
+            isOpen={isSendModalOpen}
+            product={{
+              id: productId,
+              name: formData.name,
+              slug: formData.slug,
+              price: formData.price,
+              promo_price: formData.promo_price,
+              description: formData.description,
+              headline: formData.headline,
+              cover_image: formData.cover_image,
+            }}
+            onClose={() => setIsSendModalOpen(false)}
+            onSuccess={() => {
+              setFormData((prev) => ({
+                ...prev,
+                sends_count: (prev.sends_count ?? 0) + 1,
+              }));
+            }}
+          />
+        )}
       </div>
     </PainelLayoutClient>
   );

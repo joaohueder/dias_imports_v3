@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     const [rows] = await pool.query<RowDataPacket[]>(query, params);
 
-    // Métricas resumidas
+    // Métricas resumidas e limites de assinatura
     const [metricsRows] = await pool.query<RowDataPacket[]>(
       `SELECT 
         COUNT(*) as total_groups,
@@ -81,6 +81,22 @@ export async function GET(request: NextRequest) {
       closed_groups: 0,
     };
 
+    // Consulta limite de grupos do plano da assinatura ativa
+    const [subRows] = await pool.query<RowDataPacket[]>(
+      `SELECT s.id, s.plan_snapshot_max_groups, p.max_groups as plan_max_groups
+       FROM subscriptions s
+       LEFT JOIN plans p ON s.plan_id = p.id
+       WHERE s.company_id = ? AND s.status = 'active'
+       ORDER BY s.id DESC
+       LIMIT 1`,
+      [companyId]
+    );
+
+    const activeSub = subRows[0] || null;
+    const limitGroups = activeSub
+      ? Number(activeSub.plan_snapshot_max_groups ?? activeSub.plan_max_groups ?? 10)
+      : 10;
+
     return NextResponse.json({
       success: true,
       groups: rows,
@@ -89,6 +105,7 @@ export async function GET(request: NextRequest) {
         total_participants: Number(metrics.total_participants) || 0,
         active_groups: Number(metrics.active_groups) || 0,
         closed_groups: Number(metrics.closed_groups) || 0,
+        limit_groups: limitGroups,
       },
     });
   } catch (error: any) {
@@ -134,6 +151,40 @@ export async function POST(request: NextRequest) {
     }
 
     const pool = getDbPool();
+
+    // Validação de limite de grupos da assinatura ativa
+    const [subRows] = await pool.query<RowDataPacket[]>(
+      `SELECT s.id, s.plan_snapshot_max_groups, p.max_groups as plan_max_groups
+       FROM subscriptions s
+       LEFT JOIN plans p ON s.plan_id = p.id
+       WHERE s.company_id = ? AND s.status = 'active'
+       ORDER BY s.id DESC
+       LIMIT 1`,
+      [companyId]
+    );
+
+    const activeSub = subRows[0] || null;
+    const limitGroups = activeSub
+      ? Number(activeSub.plan_snapshot_max_groups ?? activeSub.plan_max_groups ?? 10)
+      : 10;
+
+    if (limitGroups > 0) {
+      const [countRows] = await pool.query<RowDataPacket[]>(
+        `SELECT COUNT(*) as total FROM company_whatsapp_groups WHERE company_id = ?`,
+        [companyId]
+      );
+      const currentTotal = Number(countRows[0]?.total || 0);
+      if (currentTotal >= limitGroups) {
+        return NextResponse.json(
+          {
+            success: false,
+            limit_reached: true,
+            message: `Limite de grupos atingido (${currentTotal}/${limitGroups}). Faça um upgrade do seu plano para gerenciar e disparar para mais grupos no WhatsApp!`,
+          },
+          { status: 403 }
+        );
+      }
+    }
 
     const [result] = await pool.query<ResultSetHeader>(
       `INSERT INTO company_whatsapp_groups (

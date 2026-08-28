@@ -63,6 +63,15 @@ export default function SaUsersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
+  const hasActiveFilters = search.trim().length > 0 || roleFilter !== "all" || statusFilter !== "active";
+
+  const handleClearFilters = () => {
+    setSearch("");
+    setRoleFilter("all");
+    setStatusFilter("active");
+    setCurrentPage(1);
+  };
+
   const [currentLoggedUser, setCurrentLoggedUser] = useState<{ id: number; email: string } | null>(null);
 
   // Modais de Governança
@@ -256,6 +265,18 @@ export default function SaUsersPage() {
               <option value="all" className="bg-slate-900 text-slate-200">Todos os Status</option>
             </select>
           </div>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-semibold transition-all whitespace-nowrap active:scale-95 cursor-pointer shrink-0"
+              title="Limpar todos os filtros"
+            >
+              <XCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span>Limpar Filtros</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -270,8 +291,28 @@ export default function SaUsersPage() {
           <Users className="w-10 h-10 mx-auto text-slate-600" />
           <p className="text-base font-semibold text-slate-300">Nenhum usuário encontrado</p>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Tente ajustar os filtros de busca ou cadastre um novo usuário operador para o sistema.
+            {hasActiveFilters
+              ? "Tente ajustar os filtros de busca ou clique no botão abaixo para restaurar os filtros."
+              : "Tente ajustar os filtros de busca ou cadastre um novo usuário operador para o sistema."}
           </p>
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all cursor-pointer shadow-md"
+            >
+              <XCircle className="w-3.5 h-3.5 text-rose-400" />
+              <span>Limpar Filtros</span>
+            </button>
+          ) : (
+            <Link
+              href="/sa/users/new"
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Novo Usuário</span>
+            </Link>
+          )}
         </div>
       ) : (
         <>

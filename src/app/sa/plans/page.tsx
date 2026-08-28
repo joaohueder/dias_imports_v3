@@ -9,6 +9,7 @@ import {
   Search,
   Filter,
   CheckCircle2,
+  XCircle,
   Edit2,
   Trash2,
   Users,
@@ -21,6 +22,7 @@ import {
   ArrowUpDown,
   Power,
   RefreshCw,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
@@ -36,6 +38,8 @@ interface Plan {
   max_groups: number;
   max_products: number;
   max_messages_day: number;
+  max_views?: number;
+  max_leads?: number;
   max_instances: number;
   is_featured: boolean | number;
   sort_order?: number;
@@ -61,6 +65,13 @@ export default function PlansPage() {
 
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [planToChangeStatus, setPlanToChangeStatus] = useState<Plan | null>(null);
+
+  const hasActiveFilters = searchTerm.trim().length > 0 || statusFilter !== "active";
+
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("active");
+  };
 
   const fetchPlans = useCallback(async () => {
     try {
@@ -248,6 +259,18 @@ export default function PlansPage() {
               <option value="inactive" className="bg-slate-900 text-slate-200">Inativos</option>
             </select>
           </div>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-semibold transition-all whitespace-nowrap active:scale-95 cursor-pointer shrink-0"
+              title="Limpar todos os filtros"
+            >
+              <XCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span>Limpar Filtros</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -276,15 +299,28 @@ export default function PlansPage() {
           <Layers className="w-12 h-12 text-slate-600 mx-auto mb-3" />
           <h3 className="text-base font-bold text-white">Nenhum plano encontrado</h3>
           <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-            Cadastre os planos do SaaS com os limites de operação e valores comerciais.
+            {hasActiveFilters
+              ? "Nenhum plano corresponde aos critérios de busca ou filtros aplicados."
+              : "Cadastre os planos do SaaS com os limites de operação e valores comerciais."}
           </p>
-          <Link
-            href="/sa/plans/new"
-            className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white"
-          >
-            <Plus className="w-4 h-4" />
-            Criar Plano
-          </Link>
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all cursor-pointer shadow-md"
+            >
+              <XCircle className="w-3.5 h-3.5 text-rose-400" />
+              <span>Limpar Filtros</span>
+            </button>
+          ) : (
+            <Link
+              href="/sa/plans/new"
+              className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white"
+            >
+              <Plus className="w-4 h-4" />
+              Criar Plano
+            </Link>
+          )}
         </div>
       ) : (
         <Reorder.Group
@@ -401,13 +437,33 @@ export default function PlansPage() {
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between text-xs py-1.5">
+                    <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-800/60">
                       <span className="text-slate-400 flex items-center gap-2">
                         <MessageSquare className="w-4 h-4 text-emerald-400" />
                         Limite de Envios:
                       </span>
                       <span className="font-bold text-white">
                         {plan.max_messages_day.toLocaleString("pt-BR")} / dia
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-800/60">
+                      <span className="text-slate-400 flex items-center gap-2">
+                        <Eye className="w-4 h-4 text-cyan-400" />
+                        Limite de Views:
+                      </span>
+                      <span className="font-bold text-white">
+                        {Number(plan.max_views) === 0 ? "Ilimitado" : `${Number(plan.max_views).toLocaleString("pt-BR")} views`}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs py-1.5">
+                      <span className="text-slate-400 flex items-center gap-2">
+                        <Users className="w-4 h-4 text-amber-400" />
+                        Limite de Leads:
+                      </span>
+                      <span className="font-bold text-white">
+                        {Number(plan.max_leads) === 0 ? "Ilimitado" : `${Number(plan.max_leads).toLocaleString("pt-BR")} leads`}
                       </span>
                     </div>
                   </div>

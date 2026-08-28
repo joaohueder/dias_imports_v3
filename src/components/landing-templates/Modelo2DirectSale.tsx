@@ -53,6 +53,7 @@ export const Modelo2DirectSale: React.FC<TemplateProductProps> = ({
   cta_text = "Quero Garantir Com Desconto",
   cta_icon = "flame",
   cta_animation = "pulse",
+  headline,
   benefits,
   benefits_icon = "check",
   offer_box_style = "model_1",
@@ -226,10 +227,22 @@ export const Modelo2DirectSale: React.FC<TemplateProductProps> = ({
           </div>
           <h1
             style={titleFontStyle}
-            className={`font-black tracking-tight ${isInsideMockup ? "text-[20px]" : "text-[24px] sm:text-[26px]"} ${isDark ? "text-white" : "text-slate-950"} leading-tight`}
+            className={`font-bold tracking-tight ${isInsideMockup ? "text-[20px]" : "text-[23px] sm:text-[25px]"} ${isDark ? "text-white" : "text-slate-950"} leading-tight`}
           >
             {name || "Produto Sem Nome"}
           </h1>
+
+          {/* HEADLINE / CHAMADA DE IMPACTO */}
+          {headline ? (
+            <p
+              className={`text-xs sm:text-sm font-semibold mt-1.5 leading-snug flex items-start gap-1.5 ${
+                isDark ? "text-rose-300" : "text-rose-700"
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: mainColor }} />
+              <span>{headline}</span>
+            </p>
+          ) : null}
         </div>
 
         {/* 3. GALERIA COM BADGE FLUTUANTE DE DESCONTO */}

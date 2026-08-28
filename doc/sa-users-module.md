@@ -1,7 +1,7 @@
 # Módulo: Usuários do Sistema SaaS (Super Admin & Admin)
 
 **Documento:** `doc/sa-users-module.md`  
-**Versão Inicial:** `2026.08.0064`  
+**Versão:** `2026.08.0482`  
 **Autor:** JH7  
 **Skill Responsável:** `JH7-DESENVOLVEDOR`, `JH7-DESIGNER`, `JH7-SECURITY-GUARDIAN`, `JH7-MESTRE-DOCUMENTACAO`
 
@@ -13,6 +13,7 @@ O módulo de **Usuários do Sistema** (`/sa/users`) é responsável pelo gerenci
 Ele estabelece duas categorias de papéis para os usuários do backoffice:
 1. **Super Admin (`SUPER_ADMIN`)**: Acesso irrestrito e total a todos os módulos, bancos de dados, migrations, instâncias e configurações globais.
 2. **Admin (`ADMIN`)**: Acesso controlado com matriz de permissões granulares por módulo (`dashboard`, `health`, `companies`, `plans`, `subscriptions`, `users`, `migrations`, `instances`, `workers`, `jobs`, `logs`, `settings`, `default_instance`) e por ação (`view`, `create`, `edit`, `delete`).
+3. **Filtros e Controles**: Barra de busca em tempo real com filtros por Papel e Status, integrando botão de **Limpar Filtros** dinâmico e suporte a reset pelo estado vazio.
 
 ---
 

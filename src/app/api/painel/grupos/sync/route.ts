@@ -37,13 +37,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 2. Enfileirar 1 tarefa individual por grupo na fila de background jobs
+    // 2. Enfileirar 1 tarefa individual por grupo na fila dedicada de sincronização de grupos
     const { enqueueJob } = await import("@/lib/jobs-engine");
     const jobIds: string[] = [];
 
     for (const group of savedGroups) {
       const jobId = await enqueueJob(
-        "evolution-webhook-sync",
+        "whatsapp-groups-sync",
         `sync_group_${group.whatsapp_group_id || group.id}`,
         {
           company_id: companyId,
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       details: {
         total_groups: savedGroups.length,
         total_jobs_enqueued: jobIds.length,
-        queue: "evolution-webhook-sync",
+        queue: "whatsapp-groups-sync",
         job_ids: jobIds,
       },
     });

@@ -428,66 +428,7 @@ export default function SaJobsPage() {
         </div>
       </div>
 
-      {/* 3. FILAS REGISTRADAS */}
-      <div className="rounded-2xl bg-[#090f1d]/90 border border-slate-800/80 shadow-2xl shadow-black/30 p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Layers className="w-4 h-4 text-indigo-400" />
-              Filas do Ecossistema (Persistência & BullMQ)
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Tópicos de processamento assíncrono sincronizados no banco de dados e gerenciados pelos Workers.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {queues.map((q) => (
-            <div
-              key={q.id}
-              className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/80 flex flex-col justify-between space-y-3"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <span className="font-mono text-xs font-bold text-white flex items-center gap-1.5">
-                    <Server className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                    {q.name}
-                  </span>
-                  <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                    {q.description}
-                  </p>
-                </div>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                  Operacional
-                </span>
-              </div>
-
-              <div className="grid grid-cols-4 gap-2 pt-3 border-t border-slate-800/60 text-center font-mono text-[11px]">
-                <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
-                  <span className="block text-slate-500 text-[9px] uppercase">Ativas</span>
-                  <span className="font-bold text-emerald-400">{q.active}</span>
-                </div>
-                <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
-                  <span className="block text-slate-500 text-[9px] uppercase">Fila</span>
-                  <span className="font-bold text-amber-400">{q.waiting}</span>
-                </div>
-                <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
-                  <span className="block text-slate-500 text-[9px] uppercase">Concluídas</span>
-                  <span className="font-bold text-indigo-300">{q.completed}</span>
-                </div>
-                <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
-                  <span className="block text-slate-500 text-[9px] uppercase">Falhas</span>
-                  <span className="font-bold text-rose-400">{q.failed}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 4. TABELA DE EXECUÇÕES RECENTES & HISTÓRICO PERSISTIDO */}
+      {/* 3. TABELA DE EXECUÇÕES RECENTES & HISTÓRICO PERSISTIDO */}
       <div className="rounded-2xl bg-[#090f1d]/90 border border-slate-800/80 shadow-2xl shadow-black/30 overflow-hidden">
         {/* Cabeçalho */}
         <div className="p-4 sm:p-5 border-b border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0b1222]/80">

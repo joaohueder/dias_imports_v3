@@ -64,6 +64,8 @@ export async function PUT(
       max_groups,
       max_products,
       max_messages_day,
+      max_views,
+      max_leads,
       max_instances,
       is_featured,
     } = body;
@@ -79,6 +81,8 @@ export async function PUT(
     const planMaxGroups = parseInt(max_groups, 10) || 0;
     const planMaxProducts = parseInt(max_products, 10) || 0;
     const planMaxMessages = parseInt(max_messages_day, 10) || 0;
+    const planMaxViews = parseInt(max_views, 10) || 0;
+    const planMaxLeads = parseInt(max_leads, 10) || 0;
     const planMaxInstances = parseInt(max_instances, 10) || 1;
     const planStatus = status === "inactive" ? "inactive" : "active";
     const planCycle = billing_cycle || "monthly";
@@ -94,6 +98,8 @@ export async function PUT(
         max_groups = ?,
         max_products = ?,
         max_messages_day = ?,
+        max_views = ?,
+        max_leads = ?,
         max_instances = ?,
         is_featured = ?
        WHERE id = ?`,
@@ -106,6 +112,8 @@ export async function PUT(
         planMaxGroups,
         planMaxProducts,
         planMaxMessages,
+        planMaxViews,
+        planMaxLeads,
         planMaxInstances,
         planFeatured,
         id,

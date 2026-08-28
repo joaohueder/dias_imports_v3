@@ -202,10 +202,13 @@ export async function deleteEvolutionInstance(instanceName: string) {
 export async function sendEvolutionText(instanceName: string, number: string, text: string) {
   const { url, apiKey } = getEvolutionConfig();
 
-  // Limpa caracteres do número deixando apenas dígitos
-  let cleanNumber = number.replace(/\D/g, "");
-  if ((cleanNumber.length === 10 || cleanNumber.length === 11) && !cleanNumber.startsWith("55")) {
-    cleanNumber = "55" + cleanNumber;
+  // Para grupos (@g.us), não remove o formato do JID
+  let cleanNumber = number;
+  if (!cleanNumber.includes("@g.us")) {
+    cleanNumber = cleanNumber.replace(/\D/g, "");
+    if ((cleanNumber.length === 10 || cleanNumber.length === 11) && !cleanNumber.startsWith("55")) {
+      cleanNumber = "55" + cleanNumber;
+    }
   }
 
   try {
@@ -239,6 +242,80 @@ export async function sendEvolutionText(instanceName: string, number: string, te
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
     console.error(`Erro ao enviar mensagem via Evolution (${instanceName}):`, error);
+    return {
+      ok: false,
+      status: 500,
+      data: { error: message },
+    };
+  }
+}
+
+/**
+ * Envia uma mensagem com mídia (imagem, vídeo ou documento) através da Evolution API v2.3.7
+ */
+export async function sendEvolutionMedia(
+  instanceName: string,
+  number: string,
+  mediaUrlOrBase64: string,
+  caption?: string,
+  fileName?: string,
+  mediaType: "image" | "video" | "document" = "image"
+) {
+  const { url, apiKey } = getEvolutionConfig();
+
+  // Para grupos (@g.us), não remove o formato do JID
+  let cleanNumber = number;
+  if (!cleanNumber.includes("@g.us")) {
+    cleanNumber = cleanNumber.replace(/\D/g, "");
+    if ((cleanNumber.length === 10 || cleanNumber.length === 11) && !cleanNumber.startsWith("55")) {
+      cleanNumber = "55" + cleanNumber;
+    }
+  }
+
+  // A Evolution API v2.3.7 exige Base64 puro (sem o prefixo 'data:image/...;base64,') ou uma URL pública http(s)
+  let cleanMedia = mediaUrlOrBase64;
+  if (cleanMedia.includes(";base64,")) {
+    cleanMedia = cleanMedia.split(";base64,")[1] || cleanMedia;
+  }
+
+  const payload: Record<string, any> = {
+    number: cleanNumber,
+    mediatype: mediaType,
+    media: cleanMedia,
+    caption: caption || "",
+    delay: 1000,
+  };
+
+  if (fileName) {
+    payload.fileName = fileName;
+  }
+
+  try {
+    const res = await fetch(`${url}/message/sendMedia/${instanceName}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: apiKey,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const rawText = await res.text();
+    let data: unknown;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      data = { error: rawText || "Resposta não-JSON do servidor Evolution API" };
+    }
+
+    return {
+      ok: res.ok,
+      status: res.status,
+      data,
+    };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    console.error(`Erro ao enviar mídia via Evolution (${instanceName}):`, error);
     return {
       ok: false,
       status: 500,

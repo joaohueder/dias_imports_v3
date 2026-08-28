@@ -1,66 +1,75 @@
 import { NextResponse } from "next/server";
-import mysql from "mysql2/promise";
+import { getDbPool } from "@/lib/db";
+import { RowDataPacket } from "mysql2";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  let connection: mysql.Connection | null = null;
-  const host = process.env.DB_HOST || "localhost";
-  const port = Number(process.env.DB_PORT) || 3306;
-  const user = process.env.DB_USER || "root";
-  const password = process.env.DB_PASSWORD || "";
-  const database = process.env.DB_NAME || "jh7_marketing";
-
   try {
-    connection = await mysql.createConnection({
-      host,
-      port,
-      user,
-      password,
-      database,
-      connectTimeout: 3000,
-    });
+    const { readHealthSnapshotFromFile } = await import("@/lib/health-snapshot");
+    const fileSnap = readHealthSnapshotFromFile();
 
-    await connection.ping();
-    await connection.end();
-
-    return NextResponse.json({
-      status: "online",
-      database,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error: unknown) {
-    if (connection) {
-      try {
-        await connection.end();
-      } catch {
-        // ignora erro ao fechar conexão falha
+    // Se o arquivo tiver menos de 30 segundos, usa direto
+    if (fileSnap && fileSnap.updated_at) {
+      const snapAgeMs = Date.now() - new Date(fileSnap.updated_at).getTime();
+      if (snapAgeMs < 30000) {
+        return NextResponse.json({
+          status: fileSnap.db_status,
+          database: process.env.DB_NAME || "jh7_marketing",
+          latencyMs: fileSnap.db_latency_ms,
+          timestamp: fileSnap.updated_at,
+        });
       }
     }
 
-    const message = error instanceof Error ? error.message : "Erro de conexão";
-    const code = (error as { code?: string })?.code || "UNKNOWN_ERROR";
-    const errno = (error as { errno?: number })?.errno;
-    const sqlState = (error as { sqlState?: string })?.sqlState;
+    // Se não houver snapshot recente, faz probe direto no banco com timeout rápido
+    const pool = getDbPool();
+    const t0 = Date.now();
+    try {
+      const [rows] = await pool.query<RowDataPacket[]>(
+        "SELECT db_status, db_latency_ms, updated_at FROM system_health_snapshots WHERE id = 1 LIMIT 1"
+      );
 
+      const latency = Date.now() - t0;
+
+      if (rows.length > 0) {
+        const snap = rows[0];
+        return NextResponse.json({
+          status: snap.db_status || "online",
+          database: process.env.DB_NAME || "jh7_marketing",
+          latencyMs: snap.db_latency_ms || latency,
+          timestamp: snap.updated_at || new Date().toISOString(),
+        });
+      }
+
+      return NextResponse.json({
+        status: "online",
+        database: process.env.DB_NAME || "jh7_marketing",
+        latencyMs: latency,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (dbErr) {
+      return NextResponse.json(
+        {
+          status: "offline",
+          message: "Conexão com o banco de dados falhou",
+          database: process.env.DB_NAME || "jh7_marketing",
+          latencyMs: 0,
+          timestamp: new Date().toISOString(),
+        },
+        { status: 200 }
+      );
+    }
+  } catch (error: unknown) {
     return NextResponse.json(
       {
         status: "offline",
-        message,
-        code,
-        errno,
-        sqlState,
-        config: {
-          host,
-          port,
-          user,
-          database,
-          hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
-          hasDbHost: Boolean(process.env.DB_HOST),
-        },
+        message: "Erro ao verificar saúde do banco de dados",
+        database: process.env.DB_NAME || "jh7_marketing",
+        latencyMs: 0,
         timestamp: new Date().toISOString(),
       },
-      { status: 503 }
+      { status: 200 }
     );
   }
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbPool } from "@/lib/db";
-import { getCurrentCompanyUser, getCurrentSaUser } from "@/lib/session";
+import { getCurrentCompanyUser, getCurrentSaUser, getEffectiveCompanyId } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
 
@@ -30,10 +30,12 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.trim() || "";
     const status = searchParams.get("status") || "all";
+    const archived = searchParams.get("archived") || "exclude";
 
-    const cookieStore = request.cookies;
-    const impersonateCompanyId = cookieStore.get("company_id")?.value;
-    const companyId = user.company_id || (impersonateCompanyId ? parseInt(impersonateCompanyId, 10) : 1);
+    const companyId = await getEffectiveCompanyId(user, request.cookies);
+    if (!companyId) {
+      return NextResponse.json({ success: false, message: "Empresa não associada" }, { status: 403 });
+    }
 
     const pool = getDbPool();
 
@@ -48,6 +50,7 @@ export async function GET(request: NextRequest) {
         price DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
         promo_price DECIMAL(10, 2) NULL,
         status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+        is_archived BOOLEAN NOT NULL DEFAULT FALSE,
         images JSON NULL,
         cover_image TEXT NULL,
         whatsapp_destination VARCHAR(50) NULL DEFAULT 'default',
@@ -76,11 +79,19 @@ export async function GET(request: NextRequest) {
       // Ignora caso a coluna já exista
     }
 
+    // Garante as colunas last_accessed_at e is_archived caso a tabela já exista
+    try {
+      await pool.query(`ALTER TABLE company_products ADD COLUMN last_accessed_at TIMESTAMP NULL DEFAULT NULL AFTER clicks_count`);
+    } catch {}
+    try {
+      await pool.query(`ALTER TABLE company_products ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT FALSE AFTER status`);
+    } catch {}
+
     let query = `
-      SELECT id, company_id, name, slug, description, price, promo_price, status,
+      SELECT id, company_id, name, slug, description, price, promo_price, status, is_archived,
              images, cover_image, layout_template, whatsapp_destination,
              layout_color, layout_theme, layout_font, cta_text, cta_icon, cta_animation, headline, guarantee_text,
-             benefits, benefits_icon, offer_box_style, external_link, sends_count, views_count, clicks_count, created_at, updated_at
+             benefits, benefits_icon, offer_box_style, external_link, sends_count, views_count, clicks_count, last_accessed_at, created_at, updated_at
       FROM company_products
       WHERE company_id = ?
     `;
@@ -95,6 +106,12 @@ export async function GET(request: NextRequest) {
       query += ` AND status = ?`;
       params.push(status);
     }
+
+    if (archived === "only") {
+      query += ` AND is_archived = 1`;
+    } else if (archived === "exclude") {
+      query += ` AND (is_archived = 0 OR is_archived IS NULL)`;
+    } // if "all", não filtra por is_archived
 
     query += ` ORDER BY id DESC`;
 
@@ -123,11 +140,15 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Métricas
-    const [metricsRows] = await pool.query<RowDataPacket[]>(
+    // Métricas atualizadas:
+    // 1. Produtos ativos vs cadastrados
+    // 2. Envios hoje vs Limite diário do plano
+    // 3. Envios do período da assinatura vs Limite total/mensal
+    // 4. Visualizações totais
+    const [productStatsRows] = await pool.query<RowDataPacket[]>(
       `SELECT 
         COUNT(*) as total_products,
-        SUM(sends_count) as total_sends,
+        SUM(CASE WHEN status = 'active' AND is_archived = 0 THEN 1 ELSE 0 END) as active_products,
         SUM(views_count) as total_views,
         SUM(clicks_count) as total_clicks
        FROM company_products
@@ -135,21 +156,101 @@ export async function GET(request: NextRequest) {
       [companyId]
     );
 
-    const metrics = metricsRows[0] || {
+    const prodStats = productStatsRows[0] || {
       total_products: 0,
-      total_sends: 0,
+      active_products: 0,
       total_views: 0,
       total_clicks: 0,
     };
+
+    // Busca assinatura ativa e seus limites de plano (snapshot ou plano vinculado)
+    const [subRows] = await pool.query<RowDataPacket[]>(
+      `SELECT s.id, s.current_period_start, s.current_period_end, s.created_at,
+              s.plan_snapshot_max_messages_day, s.plan_snapshot_max_products, s.plan_snapshot_max_views,
+              p.max_messages_day as plan_max_messages_day,
+              p.max_products as plan_max_products,
+              p.max_views as plan_max_views,
+              p.billing_cycle
+       FROM subscriptions s
+       LEFT JOIN plans p ON s.plan_id = p.id
+       WHERE s.company_id = ? AND s.status = 'active'
+       ORDER BY s.id DESC
+       LIMIT 1`,
+      [companyId]
+    );
+
+    const activeSub = subRows[0] || null;
+
+    // Limite diário de mensagens (0 = ilimitado)
+    const limitDaily = activeSub
+      ? Number(activeSub.plan_snapshot_max_messages_day ?? activeSub.plan_max_messages_day ?? 1000)
+      : 500;
+
+    // Limite da assinatura (mensal / período = diário * 30 ou valor proporcional)
+    const limitSubscription = limitDaily > 0 ? limitDaily * 30 : 0;
+
+    // Limite de produtos do plano (0 = ilimitado)
+    const limitProducts = activeSub
+      ? Number(activeSub.plan_snapshot_max_products ?? activeSub.plan_max_products ?? 0)
+      : 0;
+
+    // Limite de visualizações do plano/assinatura (0 = ilimitado)
+    const limitViews = activeSub
+      ? Number(activeSub.plan_snapshot_max_views ?? activeSub.plan_max_views ?? 0)
+      : 0;
+
+    // Envios hoje (disparos criados hoje no background_jobs para esta empresa)
+    const [jobsTodayRows] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) as sends_today
+       FROM background_jobs
+       WHERE queue_name LIKE 'whatsapp-messages%'
+         AND (status = 'completed' OR status = 'active' OR status = 'waiting' OR status = 'delayed')
+         AND DATE(created_at) = CURDATE()
+         AND (
+           JSON_UNQUOTE(JSON_EXTRACT(payload, '$.company_id')) = ? 
+           OR JSON_UNQUOTE(JSON_EXTRACT(payload, '$.companyId')) = ?
+         )`,
+      [String(companyId), String(companyId)]
+    );
+
+    const sendsToday = Number(jobsTodayRows[0]?.sends_today || 0);
+
+    // Envios no período da assinatura (se houver data de início do período, senão últimos 30 dias)
+    const subStartDate = activeSub?.current_period_start || activeSub?.created_at || null;
+    let subSendsQuery = `SELECT COUNT(*) as sends_subscription
+                         FROM background_jobs
+                         WHERE queue_name LIKE 'whatsapp-messages%'
+                           AND (status = 'completed' OR status = 'active' OR status = 'waiting' OR status = 'delayed')
+                           AND (
+                             JSON_UNQUOTE(JSON_EXTRACT(payload, '$.company_id')) = ? 
+                             OR JSON_UNQUOTE(JSON_EXTRACT(payload, '$.companyId')) = ?
+                           )`;
+    const subSendsParams: any[] = [String(companyId), String(companyId)];
+
+    if (subStartDate) {
+      subSendsQuery += ` AND created_at >= ?`;
+      subSendsParams.push(subStartDate);
+    } else {
+      subSendsQuery += ` AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)`;
+    }
+
+    const [jobsSubRows] = await pool.query<RowDataPacket[]>(subSendsQuery, subSendsParams);
+    const sendsSubscription = Number(jobsSubRows[0]?.sends_subscription || 0);
 
     return NextResponse.json({
       success: true,
       products: parsedProducts,
       metrics: {
-        total_products: Number(metrics.total_products) || 0,
-        total_sends: Number(metrics.total_sends) || 0,
-        total_views: Number(metrics.total_views) || 0,
-        total_clicks: Number(metrics.total_clicks) || 0,
+        total_products: Number(prodStats.total_products) || 0,
+        active_products: Number(prodStats.active_products) || 0,
+        limit_products: limitProducts,
+        sends_today: sendsToday,
+        limit_daily: limitDaily,
+        sends_subscription: sendsSubscription,
+        limit_subscription: limitSubscription,
+        total_views: Number(prodStats.total_views) || 0,
+        limit_views: limitViews,
+        total_clicks: Number(prodStats.total_clicks) || 0,
       },
     });
   } catch (error: any) {
@@ -169,9 +270,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "Não autorizado" }, { status: 401 });
     }
 
-    const cookieStore = request.cookies;
-    const impersonateCompanyId = cookieStore.get("company_id")?.value;
-    const companyId = user.company_id || (impersonateCompanyId ? parseInt(impersonateCompanyId, 10) : 1);
+    const companyId = await getEffectiveCompanyId(user, request.cookies);
+    if (!companyId) {
+      return NextResponse.json({ success: false, message: "Empresa não associada" }, { status: 403 });
+    }
 
     const body = await request.json();
     const {
@@ -206,6 +308,40 @@ export async function POST(request: NextRequest) {
     const numPromoPrice = promo_price ? parseFloat(promo_price) : null;
 
     const pool = getDbPool();
+
+    // Validação de limite de produtos do plano/assinatura ativa
+    const [subRows] = await pool.query<RowDataPacket[]>(
+      `SELECT s.id, s.plan_snapshot_max_products, p.max_products as plan_max_products
+       FROM subscriptions s
+       LEFT JOIN plans p ON s.plan_id = p.id
+       WHERE s.company_id = ? AND s.status = 'active'
+       ORDER BY s.id DESC
+       LIMIT 1`,
+      [companyId]
+    );
+
+    const activeSub = subRows[0] || null;
+    const limitProducts = activeSub
+      ? Number(activeSub.plan_snapshot_max_products ?? activeSub.plan_max_products ?? 0)
+      : 0;
+
+    if (limitProducts > 0) {
+      const [countRows] = await pool.query<RowDataPacket[]>(
+        `SELECT COUNT(*) as total FROM company_products WHERE company_id = ?`,
+        [companyId]
+      );
+      const currentTotal = Number(countRows[0]?.total || 0);
+      if (currentTotal >= limitProducts) {
+        return NextResponse.json(
+          {
+            success: false,
+            limit_reached: true,
+            message: `Limite de produtos atingido (${currentTotal}/${limitProducts}). Faça um upgrade do seu plano para cadastrar mais produtos e impulsionar suas vendas!`,
+          },
+          { status: 403 }
+        );
+      }
+    }
 
     // Gerar slug único para o produto
     let baseSlug = generateSlug(name.trim());
