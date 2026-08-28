@@ -157,6 +157,8 @@ export async function DELETE(
       return NextResponse.json({ success: false, message: "Grupo não encontrado." }, { status: 404 });
     }
 
+    const oldValues = existingRows[0];
+
     await pool.query<ResultSetHeader>(
       `DELETE FROM company_whatsapp_groups WHERE id = ? AND company_id = ?`,
       [groupId, companyId]

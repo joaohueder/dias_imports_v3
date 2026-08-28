@@ -203,6 +203,14 @@ export default function PainelConfiguracoesModelosPage() {
     setPreviewModalProductId(products.length > 0 ? String(products[0].id) : "sample");
   };
 
+  const handleCopyTemplate = (tpl: TemplateItem) => {
+    if (!tpl?.content) return;
+    navigator.clipboard.writeText(tpl.content);
+    setCopiedId(tpl.id);
+    toast.success("Texto do modelo copiado!");
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   const handleImportPresets = async () => {
     try {
       setImportingPresets(true);

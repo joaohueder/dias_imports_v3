@@ -611,7 +611,7 @@ export async function processHealthMonitorJob(job: JobRecord): Promise<{ success
   const pool = getDbPool();
 
   try {
-    let dbStatus = "online";
+    let dbStatus: "online" | "offline" | "degraded" = "online";
     let dbLatencyMs = 0;
     try {
       const t0 = Date.now();
@@ -621,7 +621,7 @@ export async function processHealthMonitorJob(job: JobRecord): Promise<{ success
       dbStatus = "offline";
     }
 
-    let redisStatus = "online";
+    let redisStatus: "online" | "offline" | "degraded" = "online";
     let redisLatencyMs = 0;
     try {
       const host = process.env.REDIS_HOST || "127.0.0.1";
@@ -676,7 +676,7 @@ export async function processHealthMonitorJob(job: JobRecord): Promise<{ success
       redisStatus = "offline";
     }
 
-    let pm2Status = "online";
+    let pm2Status: "online" | "offline" | "degraded" = "online";
     try {
       const isPm2Active = await isPm2DaemonRunning();
       pm2Status = isPm2Active ? "online" : "offline";
@@ -684,8 +684,8 @@ export async function processHealthMonitorJob(job: JobRecord): Promise<{ success
       pm2Status = "offline";
     }
 
-    let evolutionStatus = "online";
-    let whatsappStatus = "disconnected";
+    let evolutionStatus: "online" | "offline" | "degraded" = "online";
+    let whatsappStatus: "connected" | "disconnected" | "connecting" = "disconnected";
     let whatsappPhone: string | null = null;
     let whatsappProfile: string | null = null;
 
