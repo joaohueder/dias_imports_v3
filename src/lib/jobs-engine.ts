@@ -762,9 +762,9 @@ export async function processHealthMonitorJob(job: JobRecord): Promise<{ success
     }
 
     // O status da infraestrutura é saudável se DB, Redis e Evolution API estão online (WhatsApp desconectado não invalida a saúde da infra)
-    const overallStatus = dbStatus === "online" && redisStatus === "online" && evolutionStatus === "online" 
+    const overallStatus: "healthy" | "degraded" | "critical" = dbStatus === "online" && redisStatus === "online" && evolutionStatus === "online" 
       ? (pm2Status === "online" ? "healthy" : "degraded") 
-      : (dbStatus === "offline" ? "offline" : "degraded");
+      : (dbStatus === "offline" ? "critical" : "degraded");
 
     // 1. Salva em arquivo local (resiliente mesmo se o MySQL cair)
     try {
@@ -1017,11 +1017,11 @@ export async function processActiveQueues(
       
       // Se for a fila de saúde e não houver job em espera, cria um job sob demanda imediatamente
       if (!job && qName === "system-health-monitor") {
-        job = await enqueueJob("system-health-monitor", "health_check", { trigger: "scheduled_or_daemon" });
+        await enqueueJob("system-health-monitor", "health_check", { trigger: "scheduled_or_daemon" });
         job = await dequeueJob(qName);
       } else if (!job && qName === "cron-subscriptions") {
         // Se for a fila de verificação de assinaturas e não houver job em espera, enfileira a tarefa
-        job = await enqueueJob("cron-subscriptions", "verify_subscriptions", { trigger: "scheduled_or_daemon" });
+        await enqueueJob("cron-subscriptions", "verify_subscriptions", { trigger: "scheduled_or_daemon" });
         job = await dequeueJob(qName);
       }
 

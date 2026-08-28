@@ -99,16 +99,16 @@ export async function PUT(
     );
 
     await logAudit({
-      user_id: user.id,
-      user_name: user.name,
-      user_email: user.email,
-      user_role: user.role,
-      company_id: companyId,
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      userRole: user.role,
+      companyId: companyId,
       action: "UPDATE",
-      entity_type: "company_whatsapp_groups",
-      entity_id: String(groupId),
-      old_values: oldValues,
-      new_values: body,
+      entityType: "company_whatsapp_groups",
+      entityId: String(groupId),
+      oldValues: oldValues,
+      newValues: body,
       status: "success",
     });
 
@@ -163,15 +163,15 @@ export async function DELETE(
     );
 
     await logAudit({
-      user_id: user.id,
-      user_name: user.name,
-      user_email: user.email,
-      user_role: user.role,
-      company_id: companyId,
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      userRole: user.role,
+      companyId: companyId,
       action: "DELETE",
-      entity_type: "company_whatsapp_groups",
-      entity_id: String(groupId),
-      old_values: existingRows[0],
+      entityType: "company_whatsapp_groups",
+      entityId: String(groupId),
+      oldValues: oldValues,
       status: "success",
     });
 

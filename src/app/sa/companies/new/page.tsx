@@ -156,7 +156,7 @@ function CompanyFormContent({ companyIdProp }: { companyIdProp?: string }) {
   const [subToExpireId, setSubToExpireId] = useState<number | null>(null);
 
   // Edição Manual de Limites da Assinatura
-  const [editingLimitType, setEditingLimitType] = useState<"groups" | "products" | "messages" | null>(null);
+  const [editingLimitType, setEditingLimitType] = useState<"groups" | "products" | "messages" | "views" | "leads" | null>(null);
   const [limitInputValue, setLimitInputValue] = useState<string>("");
   const [isSavingLimit, setIsSavingLimit] = useState(false);
 
@@ -557,7 +557,7 @@ function CompanyFormContent({ companyIdProp }: { companyIdProp?: string }) {
   };
 
   // Abrir edição de limite manual
-  const handleStartEditLimit = (type: "groups" | "products" | "messages", currentValue: number) => {
+  const handleStartEditLimit = (type: "groups" | "products" | "messages" | "views" | "leads", currentValue: number) => {
     setEditingLimitType(type);
     setLimitInputValue(String(currentValue));
   };

@@ -80,6 +80,7 @@ export async function DELETE(
       return NextResponse.json({ error: "ID inválido" }, { status: 400 });
     }
 
+    const pool = getDbPool();
     const [result]: any = await pool.query(
       "DELETE FROM sa_message_templates WHERE id = ?",
       [templateId]

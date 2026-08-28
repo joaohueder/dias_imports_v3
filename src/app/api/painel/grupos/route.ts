@@ -221,15 +221,15 @@ export async function POST(request: NextRequest) {
     const newGroupId = result.insertId;
 
     await logAudit({
-      user_id: user.id,
-      user_name: user.name,
-      user_email: user.email,
-      user_role: user.role,
-      company_id: companyId,
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      userRole: user.role,
+      companyId: companyId,
       action: "CREATE",
-      entity_type: "company_whatsapp_groups",
-      entity_id: String(newGroupId),
-      new_values: { id: newGroupId, name, group_type, status },
+      entityType: "company_whatsapp_groups",
+      entityId: String(newGroupId),
+      newValues: { id: newGroupId, name, group_type, status },
       status: "success",
     });
 

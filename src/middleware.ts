@@ -19,8 +19,8 @@ export function middleware(request: NextRequest) {
   const companyAuthToken = request.cookies.get("company_auth_token")?.value;
   const companyUserId = request.cookies.get("company_user_id")?.value;
 
-  const hasSaSession = Boolean(saAuthToken || saUserId || saUserEmail);
-  const hasCompanySession = Boolean(companyAuthToken || companyUserId || hasSaSession);
+  const hasSaSession = Boolean(saAuthToken || saUserId);
+  const hasCompanySession = Boolean(companyAuthToken || companyUserId || saAuthToken || saUserId);
 
   // 1. Proteger rotas frontend /sa (exceto login)
   if (isSaRoute && !isSaLogin) {

@@ -1,4 +1,4 @@
-import { getDbPool } from "../src/lib/db";
+import { getDbPool } from "@/lib/db";
 
 export async function up() {
   const pool = getDbPool();

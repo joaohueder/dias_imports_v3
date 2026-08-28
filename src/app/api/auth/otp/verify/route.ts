@@ -179,7 +179,7 @@ export async function POST(request: Request) {
     const isProduction = process.env.NODE_ENV === "production";
     const authToken = signSessionToken({ id: user.id, email: user.email, role: user.role });
 
-    if (user.role === "SUPER_ADMIN" || user.role === "ADMIN") {
+    if (user.role === "SUPER_ADMIN") {
       response.cookies.set("sa_auth_token", authToken, {
         path: "/",
         httpOnly: true,

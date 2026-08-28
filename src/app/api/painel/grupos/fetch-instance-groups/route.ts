@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
     try {
       const res = await fetch(endpoint, {
         headers: { apikey: apiKey },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(60000),
       });
 
       if (!res.ok) {
@@ -147,9 +147,14 @@ export async function GET(request: NextRequest) {
       });
     } catch (evoErr: any) {
       console.error("Erro ao comunicar com Evolution API:", evoErr);
+      const isTimeout = evoErr.name === "TimeoutError" || evoErr.name === "AbortError" || evoErr.message?.includes("timeout") || evoErr.message?.includes("aborted");
+      const errorMessage = isTimeout
+        ? "A consulta à Evolution API demorou mais que o esperado devido ao volume de grupos no WhatsApp. Tente novamente."
+        : `Não foi possível conectar à Evolution API: ${evoErr.message || "Erro de conexão"}`;
+
       return NextResponse.json({
         success: false,
-        message: `Não foi possível conectar à Evolution API: ${evoErr.message || "Timeout"}`,
+        message: errorMessage,
         groups: [],
         instance: { id: instance.id, name: instance.name, status: instance.status },
       });

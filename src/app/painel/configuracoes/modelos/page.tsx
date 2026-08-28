@@ -962,7 +962,7 @@ export default function PainelConfiguracoesModelosPage() {
               <div className="flex items-center justify-between pt-3 border-t border-slate-800">
                 <button
                   type="button"
-                  onClick={() => handleCopyContent(previewModalTemplate)}
+                  onClick={() => handleCopyTemplate(previewModalTemplate)}
                   className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-emerald-300 bg-slate-800 hover:bg-emerald-500/10 border border-slate-700 hover:border-emerald-500/30 transition-all cursor-pointer"
                 >
                   {copiedId === previewModalTemplate.id ? (

@@ -23,7 +23,7 @@ export async function POST(
     }
 
     // Valida permissão de impersonate no módulo companies
-    const perm = await requireSaPermission("companies", "impersonate");
+    const perm = await requireSaPermission("companies", "edit");
     if (!perm.authorized) {
       return perm.response;
     }

@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
       action: "ENQUEUE_SYNC_WHATSAPP_GROUPS_INDIVIDUAL",
       entityType: "company_whatsapp_groups",
       entityId: `${jobIds.length}_jobs`,
-      details: {
+      newValues: {
         total_groups: savedGroups.length,
         total_jobs_enqueued: jobIds.length,
         queue: "whatsapp-groups-sync",

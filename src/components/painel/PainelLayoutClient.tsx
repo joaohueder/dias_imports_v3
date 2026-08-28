@@ -185,11 +185,13 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
 
   // Carregar dados de perfil/empresa se não fornecidos
   useEffect(() => {
+    if (pathname === "/painel/login") return;
+
     async function loadData() {
       try {
         const res = await fetch("/api/painel/dashboard");
         if (res.status === 401) {
-          window.location.href = "/painel/login";
+          router.push("/painel/login");
           return;
         }
         if (res.ok) {
@@ -235,7 +237,7 @@ export function PainelLayoutClient({ children, user: initialUser, company: initi
       }
     }
     loadData();
-  }, [initialUser, initialCompany]);
+  }, [initialUser, initialCompany, pathname, router]);
 
   const [isImpersonating, setIsImpersonating] = useState(false);
 

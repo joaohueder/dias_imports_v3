@@ -1720,8 +1720,8 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
           isVisible={isDirty}
           onSave={handleSave}
           onCancel={() => router.push("/painel/produtos")}
-          isSaving={saving}
-          isValid={isFormValid}
+          isSubmitting={saving}
+          disabled={!isFormValid}
         />
 
         {/* Modal de Corte e Compressão de Imagens */}
@@ -1733,7 +1733,7 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
               setIsCropperOpen(false);
               setCroppingImageSrc(null);
             }}
-            onCropComplete={handleCroppedUpload}
+            onConfirm={handleCroppedUpload}
           />
         )}
 
