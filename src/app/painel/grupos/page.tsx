@@ -34,6 +34,7 @@ import {
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
 import { useLayout } from "@/context/LayoutContext";
 import { Pagination } from "@/components/ui/Pagination";
+import { formatTimeAgo } from "@/lib/timeAgo";
 
 interface GroupItem {
   id: number;
@@ -821,7 +822,7 @@ export default function GruposPage() {
 
                   {/* Ações do Card */}
                   <div className="mt-5 pt-3.5 border-t border-slate-800/60 flex items-center justify-between gap-2">
-                    <div>
+                    <div className="flex items-center gap-2">
                       {group.invite_link ? (
                         <button
                           onClick={() => handleCopyLink(group)}
@@ -843,6 +844,14 @@ export default function GruposPage() {
                       ) : (
                         <span className="text-[11px] text-slate-500 italic">Sem convite</span>
                       )}
+
+                      <span
+                        className="inline-flex items-center gap-1 text-[11px] text-slate-500 font-medium pl-1"
+                        title={group.updated_at ? `Atualizado em: ${new Date(group.updated_at).toLocaleString("pt-BR")}` : ""}
+                      >
+                        <Clock className="w-3 h-3 text-slate-500" />
+                        <span>Atualizado há {formatTimeAgo(group.updated_at || group.created_at)}</span>
+                      </span>
                     </div>
 
                     <div className="flex items-center gap-1.5">

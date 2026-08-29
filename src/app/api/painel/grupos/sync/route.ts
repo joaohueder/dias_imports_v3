@@ -40,16 +40,33 @@ export async function POST(request: NextRequest) {
     // 2. Enfileirar 1 tarefa individual por grupo na fila dedicada de sincronização de grupos
     const { enqueueJob } = await import("@/lib/jobs-engine");
     const jobIds: string[] = [];
+    let skippedCount = 0;
 
     for (const group of savedGroups) {
+      const jobName = `sync_group_${group.whatsapp_group_id || group.id}`;
+      const [pendingJobs] = await pool.query<RowDataPacket[]>(
+        `SELECT id FROM background_jobs
+         WHERE queue_name = 'whatsapp-groups-sync'
+           AND name = ?
+           AND status IN ('waiting', 'active', 'delayed')
+         LIMIT 1`,
+        [jobName]
+      );
+      if (pendingJobs.length > 0) {
+        skippedCount++;
+        continue;
+      }
+
       const jobId = await enqueueJob(
         "whatsapp-groups-sync",
-        `sync_group_${group.whatsapp_group_id || group.id}`,
+        jobName,
         {
           company_id: companyId,
           group_id: group.id,
           whatsapp_group_id: group.whatsapp_group_id,
           group_name: group.name,
+          action: "sync_group",
+          trigger: "manual",
           requested_by: user.id,
           requested_at: new Date().toISOString(),
         },
@@ -68,6 +85,7 @@ export async function POST(request: NextRequest) {
       newValues: {
         total_groups: savedGroups.length,
         total_jobs_enqueued: jobIds.length,
+        total_jobs_skipped_pending: skippedCount,
         queue: "whatsapp-groups-sync",
         job_ids: jobIds,
       },

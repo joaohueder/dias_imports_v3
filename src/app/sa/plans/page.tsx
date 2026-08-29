@@ -23,6 +23,8 @@ import {
   Power,
   RefreshCw,
   Eye,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
@@ -57,6 +59,7 @@ export default function PlansPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [visibilityFilter, setVisibilityFilter] = useState("all");
+  const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
 
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [togglingPlanId, setTogglingPlanId] = useState<number | null>(null);
@@ -291,6 +294,36 @@ export default function PlansPage() {
               <span>Limpar Filtros</span>
             </button>
           )}
+
+          {/* Toggle de Visualização: Cards vs Lista */}
+          <div className="flex items-center bg-slate-900 border border-slate-800 p-0.5 rounded-xl shrink-0">
+            <button
+              type="button"
+              onClick={() => setViewMode("cards")}
+              className={`p-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+                viewMode === "cards"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+              }`}
+              title="Exibição em Cards"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Cards</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`p-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+                viewMode === "list"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+              }`}
+              title="Exibição em Lista / Tabela"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Lista</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -298,7 +331,7 @@ export default function PlansPage() {
         <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-900/40 border border-slate-800/80 px-3.5 py-2 rounded-xl">
           <ArrowUpDown className="w-4 h-4 text-indigo-400 shrink-0" />
           <span>
-            Arraste os cards segurando pelo ícone para reorganizar a ordem de exibição comercial.
+            Arraste os itens segurando pelo ícone para reorganizar a ordem de exibição comercial.
           </span>
           {isSavingOrder && (
             <span className="ml-auto text-indigo-400 font-semibold animate-pulse">
@@ -308,7 +341,7 @@ export default function PlansPage() {
         </div>
       )}
 
-      {/* Grid de Planos */}
+      {/* Grid ou Lista de Planos */}
       {loading ? (
         <div className="p-12 text-center text-slate-500">
           <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
@@ -342,7 +375,191 @@ export default function PlansPage() {
             </Link>
           )}
         </div>
+      ) : viewMode === "list" ? (
+        /* Visualização em Lista Compacta e Responsiva com Drag & Drop (Sem scroll horizontal) */
+        <div className="space-y-2.5">
+          <Reorder.Group
+            axis="y"
+            values={plans}
+            onReorder={handleReorder}
+            className="space-y-2.5"
+          >
+            {plans.map((plan) => {
+              const isPlanFeatured = Boolean(plan.is_featured);
+              const isDragEnabled = !searchTerm && statusFilter === "all";
+              const isInactive = plan.status === "inactive";
+              const isPrivate = plan.is_public === 0 || plan.is_public === false;
+
+              return (
+                <Reorder.Item
+                  key={plan.id}
+                  value={plan}
+                  dragListener={isDragEnabled}
+                  layout
+                  whileDrag={{
+                    scale: 1.01,
+                    zIndex: 50,
+                    cursor: "grabbing",
+                    boxShadow: "0 20px 30px -10px rgba(0, 0, 0, 0.8), 0 0 20px rgba(99, 102, 241, 0.3)",
+                  }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 300,
+                    damping: 25,
+                  }}
+                  className={`relative flex flex-col md:flex-row md:items-center justify-between gap-3.5 p-4 rounded-xl border select-none transition-colors ${
+                    isInactive
+                      ? "bg-slate-900/30 border-slate-800/40 opacity-60 hover:opacity-85"
+                      : isPlanFeatured
+                      ? "bg-[#090f1d] border-indigo-500/50 shadow-md shadow-indigo-950/30 ring-1 ring-indigo-500/20"
+                      : "bg-[#090f1d] border-slate-800/80 hover:border-slate-700/80"
+                  } ${isDragEnabled ? "cursor-grab active:cursor-grabbing" : "cursor-default"}`}
+                >
+                  {/* Bloco 1: Identificação & Nome */}
+                  <div className="flex items-center gap-3 min-w-0 md:w-1/4">
+                    {isDragEnabled && (
+                      <div
+                        className="text-slate-500 hover:text-indigo-400 cursor-grab active:cursor-grabbing p-1 rounded-md hover:bg-slate-800 shrink-0"
+                        title="Arraste para reordenar"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </div>
+                    )}
+
+                    <div className="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0">
+                      <Layers className="w-4 h-4" />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-white text-sm truncate">{plan.name}</span>
+                        {isPlanFeatured && (
+                          <span className="px-1.5 py-0.5 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[9px] font-extrabold uppercase tracking-wider flex items-center gap-0.5 shrink-0">
+                            <Sparkles className="w-2.5 h-2.5" />
+                            Destaque
+                          </span>
+                        )}
+                      </div>
+                      {plan.description && (
+                        <p className="text-[11px] text-slate-400 line-clamp-1 truncate mt-0.5">
+                          {plan.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bloco 2: Preço & Ciclo */}
+                  <div className="flex items-baseline gap-1 shrink-0 md:w-32">
+                    <span className="text-[11px] font-medium text-slate-400">R$</span>
+                    <span className="text-base font-black text-white">
+                      {Number(plan.price).toFixed(2).replace(".", ",")}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      /{cycleLabels[plan.billing_cycle]?.substring(0, 3).toLowerCase() || "mês"}
+                    </span>
+                  </div>
+
+                  {/* Bloco 3: Limites Inclusos */}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-300 md:flex-1">
+                    <span className="flex items-center gap-1 shrink-0" title="Limite de Grupos">
+                      <Users className="w-3.5 h-3.5 text-indigo-400" />
+                      <strong className="text-white">{plan.max_groups === 0 ? "Ilimitado" : plan.max_groups}</strong> grp
+                    </span>
+                    <span className="flex items-center gap-1 shrink-0" title="Limite de Produtos">
+                      <Package className="w-3.5 h-3.5 text-violet-400" />
+                      <strong className="text-white">{plan.max_products === 0 ? "Ilimitado" : plan.max_products}</strong> prod
+                    </span>
+                    <span className="flex items-center gap-1 shrink-0" title="Limite de Envios/Dia">
+                      <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                      <strong className="text-white">{plan.max_messages_day.toLocaleString("pt-BR")}</strong>/dia
+                    </span>
+                  </div>
+
+                  {/* Bloco 4: Assinaturas */}
+                  <div className="text-[11px] text-slate-300 shrink-0 md:w-28">
+                    <span className="font-semibold text-white">
+                      {plan.active_subscriptions_count || 0}
+                    </span>{" "}
+                    ativas
+                    {Number(plan.subscriptions_count || 0) > Number(plan.active_subscriptions_count || 0) && (
+                      <span className="text-slate-500 ml-1">
+                        ({plan.subscriptions_count})
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Bloco 5: Badges de Status & Visibilidade */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider ${
+                        isPrivate
+                          ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                          : "bg-sky-500/10 text-sky-400 border-sky-500/20"
+                      }`}
+                    >
+                      {isPrivate ? "Privado" : "Público"}
+                    </span>
+
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider ${
+                        plan.status === "active"
+                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                          : "bg-slate-500/10 text-slate-400 border-slate-500/20"
+                      }`}
+                    >
+                      {plan.status === "active" ? "Ativo" : "Inativo"}
+                    </span>
+                  </div>
+
+                  {/* Bloco 6: Ações */}
+                  <div className="flex items-center justify-end gap-1 shrink-0">
+                    {can("plans", "delete") && (
+                      <button
+                        type="button"
+                        disabled={togglingPlanId === plan.id}
+                        onClick={() => {
+                          setPlanToChangeStatus(plan);
+                          setStatusModalOpen(true);
+                        }}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          plan.status === "active"
+                            ? "text-emerald-400 hover:text-rose-400 hover:bg-rose-500/10"
+                            : "text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10"
+                        } disabled:opacity-50 cursor-pointer`}
+                        title={plan.status === "active" ? "Inativar Plano" : "Ativar Plano"}
+                      >
+                        <Power className="w-4 h-4" />
+                      </button>
+                    )}
+                    {can("plans", "edit") && (
+                      <Link
+                        href={`/sa/plans/${plan.id}`}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+                        title="Editar Plano"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Link>
+                    )}
+                    {can("plans", "delete") && (
+                      <button
+                        onClick={() => {
+                          setPlanToDelete(plan);
+                          setDeleteModalOpen(true);
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                        title="Excluir Plano"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </Reorder.Item>
+              );
+            })}
+          </Reorder.Group>
+        </div>
       ) : (
+        /* Visualização em Cards (Padrão) */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <Reorder.Group
             axis="x"

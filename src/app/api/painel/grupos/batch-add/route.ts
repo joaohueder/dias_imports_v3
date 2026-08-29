@@ -45,8 +45,8 @@ export async function POST(request: NextRequest) {
 
     const activeSub = subRows[0] || null;
     const limitGroups = activeSub
-      ? Number(activeSub.plan_snapshot_max_groups ?? activeSub.plan_max_groups ?? 10)
-      : 10;
+      ? Number(activeSub.plan_snapshot_max_groups ?? activeSub.plan_max_groups ?? 0)
+      : 0;
 
     const [currentCountRows] = await pool.query<RowDataPacket[]>(
       `SELECT COUNT(*) as total FROM company_whatsapp_groups WHERE company_id = ?`,

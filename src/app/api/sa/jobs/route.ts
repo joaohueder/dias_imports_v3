@@ -57,6 +57,20 @@ export async function GET() {
       ('q-analytics', 'analytics-aggregation', 'Agregação analítica e consolidação de métricas do sistema', 0);
     `);
 
+    // Auto-recupera jobs presos em 'active' há mais de 10 minutos (stale jobs)
+    try {
+      await pool.execute(
+        `UPDATE background_jobs
+         SET status = 'failed', failed_reason = 'Tempo limite de execução excedido (stale job resetado)'
+         WHERE status = 'active' AND (
+           (processed_at IS NOT NULL AND processed_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)) OR
+           (processed_at IS NULL AND created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE))
+         )`
+      );
+    } catch {
+      // Ignora erro de limpeza preventiva
+    }
+
     // 1. Busca todas as filas cadastradas e métricas dinâmicas reais
     const [queueRows] = await pool.execute<RowDataPacket[]>(
       `SELECT q.*, 
@@ -198,15 +212,34 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Limpar tarefas concluídas
-    if (action === "purge_completed") {
-      await pool.execute<ResultSetHeader>(
-        `DELETE FROM background_jobs WHERE status = 'completed'`
+    // Limpar tarefas por status ou lote
+    if (action === "purge_completed" || action === "purge_jobs") {
+      const allowedStatuses = ["completed", "failed", "waiting", "delayed", "active"];
+      let targetStatuses: string[] = [];
+
+      if (action === "purge_completed") {
+        targetStatuses = ["completed"];
+      } else if (Array.isArray(body.statuses)) {
+        targetStatuses = body.statuses.filter((s: string) => allowedStatuses.includes(s));
+      }
+
+      if (targetStatuses.length === 0) {
+        return NextResponse.json(
+          { error: "Nenhum status válido selecionado para limpeza." },
+          { status: 400 }
+        );
+      }
+
+      const placeholders = targetStatuses.map(() => "?").join(", ");
+      const [deleteResult] = await pool.execute<ResultSetHeader>(
+        `DELETE FROM background_jobs WHERE status IN (${placeholders})`,
+        targetStatuses
       );
 
       return NextResponse.json({
         success: true,
-        message: "Histórico de tarefas concluídas limpo com sucesso.",
+        message: `${deleteResult.affectedRows} tarefa(s) com status [${targetStatuses.join(", ")}] foram removidas com sucesso.`,
+        deletedCount: deleteResult.affectedRows,
       });
     }
 

@@ -93,8 +93,8 @@ export async function GET(request: NextRequest) {
 
     const activeSub = subRows[0] || null;
     const limitGroups = activeSub
-      ? Number(activeSub.plan_snapshot_max_groups ?? activeSub.plan_max_groups ?? 10)
-      : 10;
+      ? Number(activeSub.plan_snapshot_max_groups ?? activeSub.plan_max_groups ?? 0)
+      : 0;
 
     return NextResponse.json({
       success: true,
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const limitGroups = Number(activeSub.plan_snapshot_max_groups ?? activeSub.plan_max_groups ?? 10);
+    const limitGroups = Number(activeSub.plan_snapshot_max_groups ?? activeSub.plan_max_groups ?? 0);
 
     if (limitGroups > 0) {
       const [countRows] = await pool.query<RowDataPacket[]>(

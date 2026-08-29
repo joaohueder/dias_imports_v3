@@ -135,8 +135,8 @@ export async function GET(request: NextRequest) {
 
     // Limite diário de mensagens (0 = ilimitado)
     const limitDaily = activeSub
-      ? Number(activeSub.plan_snapshot_max_messages_day ?? activeSub.plan_max_messages_day ?? 1000)
-      : 500;
+      ? Number(activeSub.plan_snapshot_max_messages_day ?? activeSub.plan_max_messages_day ?? 0)
+      : 0;
 
     // Limite da assinatura (mensal / período = diário * 30 ou valor proporcional)
     const limitSubscription = limitDaily > 0 ? limitDaily * 30 : 0;

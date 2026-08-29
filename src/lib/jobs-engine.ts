@@ -34,6 +34,7 @@ export interface WorkerConfig {
   max_delay_seconds: number;
   batch_size: number;
   batch_pause_seconds: number;
+  schedule_enabled?: boolean;
   status: "active" | "idle" | "paused" | "stopped";
 }
 
@@ -96,7 +97,7 @@ export async function scheduleInstanceDelay(
 export async function getWorkerConfigByQueue(queueName: string): Promise<WorkerConfig | null> {
   const pool = getDbPool();
   const [rows] = await pool.execute<RowDataPacket[]>(
-    `SELECT id, name, queue_name, concurrency, min_delay_seconds, max_delay_seconds, batch_size, batch_pause_seconds, status
+    `SELECT id, name, queue_name, concurrency, min_delay_seconds, max_delay_seconds, batch_size, batch_pause_seconds, schedule_enabled, status
      FROM workers
      WHERE queue_name = ?
      ORDER BY created_at ASC
@@ -115,6 +116,7 @@ export async function getWorkerConfigByQueue(queueName: string): Promise<WorkerC
     max_delay_seconds: Number(w.max_delay_seconds) || 15,
     batch_size: Number(w.batch_size) || 10,
     batch_pause_seconds: Number(w.batch_pause_seconds) || 30,
+    schedule_enabled: Boolean(w.schedule_enabled),
     status: w.status,
   };
 }
@@ -145,6 +147,22 @@ export async function enqueueJob(
  */
 export async function dequeueJob(queueName: string): Promise<JobRecord | null> {
   const pool = getDbPool();
+
+  // Auto-recupera jobs presos em 'active' há mais de 10 minutos (ex: reinício de servidor ou timeout)
+  try {
+    await pool.execute(
+      `UPDATE background_jobs
+       SET status = 'failed', failed_reason = 'Tempo limite de execução excedido (stale job resetado)'
+       WHERE queue_name = ? AND status = 'active' AND (
+         (processed_at IS NOT NULL AND processed_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)) OR
+         (processed_at IS NULL AND created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE))
+       )`,
+      [queueName]
+    );
+  } catch {
+    // Ignora erro de limpeza preventiva
+  }
+
   const [rows] = await pool.execute<RowDataPacket[]>(
     `SELECT * FROM background_jobs 
      WHERE queue_name = ? AND (status = 'waiting' OR status = 'delayed')
@@ -157,7 +175,7 @@ export async function dequeueJob(queueName: string): Promise<JobRecord | null> {
 
   const [updateResult] = await pool.execute<ResultSetHeader>(
     `UPDATE background_jobs 
-     SET status = 'active', attempts = attempts + 1
+     SET status = 'active', attempts = attempts + 1, processed_at = NOW()
      WHERE id = ? AND (status = 'waiting' OR status = 'delayed')`,
     [job.id]
   );
@@ -185,7 +203,29 @@ export async function dequeueJob(queueName: string): Promise<JobRecord | null> {
 /**
  * Conclui um job com sucesso e atualiza contadores do worker
  */
-export async function completeJob(id: string, durationMs: number, queueName?: string): Promise<void> {
+async function enrichJobPayload(id: string, execution: Record<string, unknown>): Promise<void> {
+  const pool = getDbPool();
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    `SELECT payload FROM background_jobs WHERE id = ? LIMIT 1`,
+    [id]
+  );
+  if (!rows.length) return;
+
+  const currentPayload = typeof rows[0].payload === "string"
+    ? JSON.parse(rows[0].payload || "{}")
+    : rows[0].payload || {};
+  await pool.execute<ResultSetHeader>(
+    `UPDATE background_jobs SET payload = ? WHERE id = ?`,
+    [JSON.stringify({ ...currentPayload, execution }), id]
+  );
+}
+
+export async function completeJob(
+  id: string,
+  durationMs: number,
+  queueName?: string,
+  execution?: Record<string, unknown>
+): Promise<void> {
   const pool = getDbPool();
   await pool.execute<ResultSetHeader>(
     `UPDATE background_jobs 
@@ -193,6 +233,7 @@ export async function completeJob(id: string, durationMs: number, queueName?: st
      WHERE id = ?`,
     [durationMs, id]
   );
+  if (execution) await enrichJobPayload(id, execution);
 
   if (queueName) {
     await pool.execute(
@@ -445,11 +486,30 @@ export async function processGroupSyncJob(job: JobRecord): Promise<{ success: bo
     }
 
     const duration = Date.now() - start;
-    await completeJob(job.id, duration, job.queue_name);
+    await completeJob(job.id, duration, job.queue_name, {
+      action: "sync_group",
+      result: "success",
+      description: "Grupo consultado na Evolution API e dados locais atualizados",
+      updatedCount,
+      delayMs: waitedMs,
+      instance: { id: instance.id, name: instance.name, status: instance.status },
+      completedAt: new Date().toISOString(),
+    });
     return { success: true, updatedCount, delayMs: waitedMs };
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : "Erro desconhecido ao sincronizar grupo";
     await failJob(job.id, errMsg, Date.now() - start, job.queue_name);
+    try {
+      await enrichJobPayload(job.id, {
+        action: "sync_group",
+        result: "error",
+        description: "Falha ao sincronizar grupo",
+        error: errMsg,
+        completedAt: new Date().toISOString(),
+      });
+    } catch {
+      // Não substitui o erro original caso o enriquecimento do histórico falhe
+    }
     return { success: false, error: errMsg };
   }
 }
@@ -957,6 +1017,106 @@ export async function processHousekeepingJob(job: JobRecord): Promise<{ success:
 }
 
 /**
+ * Enfileira tarefas de sincronização periódica de grupos para todas as empresas ativas com instâncias
+ */
+export async function enqueuePeriodicGroupSyncJobs(): Promise<{ enqueuedCount: number; companyIds: number[] }> {
+  const pool = getDbPool();
+  try {
+    // 1. Busca grupos de empresas ativas: uma tarefa independente por grupo
+    const [groups] = await pool.query<RowDataPacket[]>(
+      `SELECT g.id, g.company_id, g.whatsapp_group_id, g.name, g.instance_id,
+              c.name AS company_name, i.name AS instance_name
+       FROM company_whatsapp_groups g
+       INNER JOIN companies c ON c.id = g.company_id
+       LEFT JOIN instances i ON i.id = g.instance_id AND i.company_id = g.company_id
+       WHERE c.status = 'active'
+         AND g.status <> 'paused'
+       ORDER BY g.company_id ASC, g.id ASC`
+    );
+
+    if (!groups.length) {
+      return { enqueuedCount: 0, companyIds: [] };
+    }
+
+    // 2. Evita duplicações por grupo; jobs antigos por empresa também bloqueiam a empresa
+    const [pendingJobs] = await pool.query<RowDataPacket[]>(
+      `SELECT payload FROM background_jobs
+       WHERE queue_name = 'whatsapp-groups-sync'
+         AND status IN ('waiting', 'active', 'delayed')`
+    );
+
+    const pendingGroupIds = new Set<number>();
+    const pendingJids = new Set<string>();
+    const pendingCompanyIds = new Set<number>();
+    for (const pendingJob of pendingJobs) {
+      try {
+        const payload = typeof pendingJob.payload === "string" ? JSON.parse(pendingJob.payload) : pendingJob.payload;
+        if (payload?.group_id) pendingGroupIds.add(Number(payload.group_id));
+        if (payload?.whatsapp_group_id) pendingJids.add(String(payload.whatsapp_group_id));
+        if (payload?.companyId) pendingCompanyIds.add(Number(payload.companyId));
+        if (payload?.company_id) pendingCompanyIds.add(Number(payload.company_id));
+      } catch {
+        // Ignora payload inválido sem interromper a rotina dos demais grupos
+      }
+    }
+
+    let enqueuedCount = 0;
+    const processedCompanyIds = new Set<number>();
+
+    for (const group of groups) {
+      const groupJid = group.whatsapp_group_id ? String(group.whatsapp_group_id) : "";
+      if (
+        pendingCompanyIds.has(Number(group.company_id)) ||
+        pendingGroupIds.has(Number(group.id)) ||
+        (groupJid && pendingJids.has(groupJid))
+      ) {
+        continue;
+      }
+
+      await enqueueJob(
+        "whatsapp-groups-sync",
+        `sync_group_${groupJid || group.id}`,
+        {
+          companyId: Number(group.company_id),
+          company_id: Number(group.company_id),
+          group_id: Number(group.id),
+          whatsapp_group_id: groupJid || null,
+          group_name: group.name,
+          group: {
+            id: Number(group.id),
+            name: group.name,
+            whatsapp_group_id: groupJid || null,
+          },
+          companyName: group.company_name,
+          company: {
+            id: Number(group.company_id),
+            name: group.company_name,
+          },
+          instance_id: group.instance_id || null,
+          instanceName: group.instance_name || null,
+          instance: {
+            id: group.instance_id || null,
+            name: group.instance_name || null,
+          },
+          action: "sync_group",
+          actionLabel: "Sincronizar dados do grupo via Evolution API",
+          trigger: "scheduled_routine",
+          createdBy: "worker-daemon",
+        },
+        3
+      );
+      enqueuedCount++;
+      processedCompanyIds.add(Number(group.company_id));
+    }
+
+    return { enqueuedCount, companyIds: Array.from(processedCompanyIds) };
+  } catch (err: unknown) {
+    console.error("Erro ao enfileirar rotina periódica de grupos:", err);
+    return { enqueuedCount: 0, companyIds: [] };
+  }
+}
+
+/**
  * Processa um lote de jobs pendentes de todas as filas ativas (ou de uma fila específica)
  */
 export async function processActiveQueues(
@@ -1015,16 +1175,10 @@ export async function processActiveQueues(
     for (let i = 0; i < batchLimit; i++) {
       let job = await dequeueJob(qName);
       
-      // Se for a fila de saúde e não houver job em espera, cria um job sob demanda imediatamente
-      if (!job && qName === "system-health-monitor") {
-        await enqueueJob("system-health-monitor", "health_check", { trigger: "scheduled_or_daemon" });
-        job = await dequeueJob(qName);
-      } else if (!job && qName === "cron-subscriptions") {
-        // Se for a fila de verificação de assinaturas e não houver job em espera, enfileira a tarefa
-        await enqueueJob("cron-subscriptions", "verify_subscriptions", { trigger: "scheduled_or_daemon" });
-        job = await dequeueJob(qName);
-      }
-
+      // Rotinas agendadas são criadas exclusivamente por seus dispatchers dedicados
+      // (/api/sa/workers/process): health é executado diretamente e grupos respeitam
+      // intervalo global + deduplicação por grupo. O processamento genérico apenas
+      // consome jobs persistidos, evitando criadores paralelos e duplicações.
       if (!job) break;
 
       let res: any;

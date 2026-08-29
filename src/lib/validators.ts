@@ -24,15 +24,36 @@ export function maskCpfCnpj(value: string): string {
 }
 
 export function maskPhone(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 11);
-  if (digits.length <= 10) {
+  if (!value) return "";
+  const digits = value.replace(/\D/g, "");
+  
+  // Tratamento para números com DDI do Brasil (55) com 12 ou 13 dígitos
+  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
+    const ddi = "+55";
+    const ddd = digits.slice(2, 4);
+    const rest = digits.slice(4);
+    if (rest.length === 9) {
+      return `${ddi} (${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
+    } else {
+      return `${ddi} (${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
+    }
+  }
+
+  // Tratamento para números de outros países com DDI (> 11 dígitos)
+  if (digits.length > 11) {
+    return `+${digits}`;
+  }
+
+  // Tratamento padrão Brasil sem DDI (10 ou 11 dígitos)
+  const localDigits = digits.slice(0, 11);
+  if (localDigits.length <= 10) {
     // (00) 0000-0000
-    return digits
+    return localDigits
       .replace(/(\d{2})(\d)/, "($1) $2")
       .replace(/(\d{4})(\d)/, "$1-$2");
   } else {
     // (00) 00000-0000
-    return digits
+    return localDigits
       .replace(/(\d{2})(\d)/, "($1) $2")
       .replace(/(\d{5})(\d)/, "$1-$2");
   }

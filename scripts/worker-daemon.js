@@ -13,6 +13,9 @@ let cachedHealthIntervalMs = 15000;
 let lastCronSubscriptionsTime = 0;
 let cachedSubscriptionsIntervalMs = 60 * 1000; // 1 minuto por padrão
 
+let lastGroupsSyncTime = 0;
+let cachedGroupsSyncIntervalMs = 300 * 1000; // 5 minutos por padrão
+
 async function runHealthCheckAutonomous(customIntervalMs) {
   try {
     const now = Date.now();
@@ -72,6 +75,17 @@ async function getActiveQueues() {
         } else {
           const secs = Number(sw.schedule_interval_seconds) || (Number(sw.schedule_interval_minutes) ? Number(sw.schedule_interval_minutes) * 60 : 60);
           cachedSubscriptionsIntervalMs = Math.max(15, secs) * 1000;
+        }
+      }
+
+      // Atualiza o intervalo configurado dinamicamente do worker de atualização de grupos WhatsApp
+      const gw = workers.find((w) => w.id === "w-groups-01" || w.queue === "whatsapp-groups-sync");
+      if (gw) {
+        if (gw.schedule_enabled === false || gw.status === "paused" || gw.status === "stopped") {
+          cachedGroupsSyncIntervalMs = null;
+        } else {
+          const secs = Number(gw.schedule_interval_seconds) || (Number(gw.schedule_interval_minutes) ? Number(gw.schedule_interval_minutes) * 60 : 300);
+          cachedGroupsSyncIntervalMs = Math.max(15, secs) * 1000;
         }
       }
 
@@ -136,6 +150,34 @@ async function runSubscriptionsCheckAutonomous(customIntervalMs) {
   }
 }
 
+async function runGroupsSyncAutonomous(customIntervalMs) {
+  try {
+    const now = Date.now();
+    const interval = customIntervalMs || cachedGroupsSyncIntervalMs || 60000;
+    if (now - lastGroupsSyncTime < interval) return;
+
+    // Dispara a rotina periódica de enfileiramento e sincronização de grupos
+    const res = await fetch(`${BASE_URL}/api/sa/workers/process`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-worker-internal": "daemon",
+      },
+      body: JSON.stringify({ queue_name: "whatsapp-groups-sync", trigger_routine: true, limit: 5 }),
+    });
+
+    if (res.ok) {
+      lastGroupsSyncTime = now;
+      const data = await res.json().catch(() => ({}));
+      if (data.enqueuedCount > 0 || data.processedCount > 0) {
+        console.log(`[Groups-Sync-Worker] Rotina de grupos executada: ${data.enqueuedCount || 0} enfileirados, ${data.processedCount || 0} processados (${new Date().toLocaleTimeString()})`);
+      }
+    }
+  } catch (err) {
+    console.error("[Groups-Sync-Worker] Erro ao disparar rotina de grupos:", err.message);
+  }
+}
+
 async function loop() {
   console.log(`[JH7 Daemon] Worker Daemon em execução...`);
 
@@ -145,6 +187,9 @@ async function loop() {
     }
     if (cachedSubscriptionsIntervalMs !== null) {
       await runSubscriptionsCheckAutonomous(cachedSubscriptionsIntervalMs);
+    }
+    if (cachedGroupsSyncIntervalMs !== null) {
+      await runGroupsSyncAutonomous(cachedGroupsSyncIntervalMs);
     }
     const activeQueues = await getActiveQueues();
     for (const q of activeQueues) {

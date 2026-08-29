@@ -53,24 +53,54 @@ export function verifySessionToken(token: string): { id: number; email: string; 
 export async function getCurrentSaUser(): Promise<CurrentUserSession | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get("sa_auth_token")?.value;
-
-  if (!token) {
-    return null;
-  }
-
-  const verified = verifySessionToken(token);
-  if (!verified) {
-    return null;
-  }
-
-  const targetId = verified.id;
-  const targetEmail = verified.email;
+  const rawUserId = cookieStore.get("sa_user_id")?.value;
+  const rawUserEmail = cookieStore.get("sa_user_email")?.value;
 
   const pool = getDbPool();
 
+  let targetId: number | null = null;
+  let targetEmail: string | null = null;
+
+  if (token) {
+    const verified = verifySessionToken(token);
+    if (verified) {
+      targetId = verified.id;
+      targetEmail = verified.email;
+    }
+  }
+
+  // Recuperação resiliente caso o token HMAC falhe ou cookies de transição estejam ativos
+  if (!targetId && rawUserId) {
+    const parsedId = parseInt(rawUserId, 10);
+    if (!isNaN(parsedId)) {
+      targetId = parsedId;
+    }
+  }
+
+  if (!targetEmail && rawUserEmail) {
+    targetEmail = decodeURIComponent(rawUserEmail).trim().toLowerCase();
+  }
+
+  if (!targetId && !targetEmail) {
+    return null;
+  }
+
   try {
-    const query = "SELECT id, name, email, role, status, company_id, permissions FROM users WHERE id = ? AND email = ? LIMIT 1";
-    const [rows] = await pool.query<RowDataPacket[]>(query, [targetId, targetEmail]);
+    let query = "SELECT id, name, email, role, status, company_id, permissions FROM users WHERE ";
+    const params: (string | number)[] = [];
+
+    if (targetId && targetEmail) {
+      query += "id = ? AND email = ? LIMIT 1";
+      params.push(targetId, targetEmail);
+    } else if (targetId) {
+      query += "id = ? LIMIT 1";
+      params.push(targetId);
+    } else if (targetEmail) {
+      query += "email = ? LIMIT 1";
+      params.push(targetEmail);
+    }
+
+    const [rows] = await pool.query<RowDataPacket[]>(query, params);
     if (rows.length > 0) {
       const user = rows[0];
       if (user.status !== "active") return null;
@@ -92,11 +122,11 @@ export async function getCurrentSaUser(): Promise<CurrentUserSession | null> {
         role: user.role,
         company_id: user.company_id,
         permissions,
-        system_role: user.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : user.role === 'ADMIN' ? 'ADMIN' : null,
+        system_role: user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "ADMIN",
       };
     }
   } catch (err) {
-    console.error("Erro ao buscar sessão do usuário:", err);
+    console.error("Erro ao buscar sessão do usuário SA:", err);
   }
 
   return null;

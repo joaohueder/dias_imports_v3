@@ -18,6 +18,7 @@ import {
   Zap,
   Square,
   Terminal,
+  X,
 } from "lucide-react";
 import { SaPageHeader } from "@/components/sa/SaPageHeader";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
@@ -725,6 +726,22 @@ export default function SaWorkersPage() {
                           : "Desativada"}
                       </p>
                     </div>
+                  ) : w.id === "w-groups-01" ? (
+                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/70 space-y-1">
+                      <p className="text-[10px] uppercase font-semibold text-emerald-400/80 tracking-wider flex items-center gap-1.5">
+                        <Clock className="w-3 h-3 text-emerald-400" />
+                        Rotina de Sincronização
+                      </p>
+                      <p className="text-xs font-bold text-emerald-300 font-mono">
+                        {w.schedule_enabled !== false
+                          ? (w.schedule_interval_minutes && w.schedule_interval_minutes >= 1440 && w.schedule_interval_minutes % 1440 === 0
+                              ? `A cada ${w.schedule_interval_minutes / 1440} dia(s)`
+                              : w.schedule_interval_minutes && w.schedule_interval_minutes >= 60 && w.schedule_interval_minutes % 60 === 0
+                              ? `A cada ${w.schedule_interval_minutes / 60}h`
+                              : `A cada ${w.schedule_interval_minutes || 5} min`)
+                          : "Manual"}
+                      </p>
+                    </div>
                   ) : (
                     <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/70 space-y-1">
                       <p className="text-[10px] uppercase font-semibold text-amber-500/80 tracking-wider flex items-center gap-1.5">
@@ -750,6 +767,16 @@ export default function SaWorkersPage() {
                           : w.id === "w-reports-01"
                           ? "Métricas & BI"
                           : "Expiração & Housekeeping"}
+                      </p>
+                    </div>
+                  ) : w.id === "w-groups-01" ? (
+                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/70 space-y-1">
+                      <p className="text-[10px] uppercase font-semibold text-amber-500/80 tracking-wider flex items-center gap-1.5">
+                        <Clock className="w-3 h-3 text-amber-400" />
+                        Anti-Ban Jitter / Lote
+                      </p>
+                      <p className="text-xs font-bold text-amber-300 font-mono">
+                        {w.min_delay_seconds}s-{w.max_delay_seconds}s <span className="text-slate-500 font-normal">({w.batch_size} / {w.batch_pause_seconds}s)</span>
                       </p>
                     </div>
                   ) : (
@@ -846,62 +873,69 @@ export default function SaWorkersPage() {
 
       {/* 5. MODAL DE CONFIGURAÇÃO DE DELAY / JITTER / BATCH */}
       {configModalOpen && configWorker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-6 space-y-5">
-            <div className="flex items-center gap-3 border-b border-slate-800/80 pb-4">
-              <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
-                <Settings2 className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg max-h-[90vh] flex flex-col rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden">
+            {/* Header Compacto */}
+            <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-slate-800/80 flex items-center justify-between gap-3 bg-slate-950/40">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                  <Settings2 className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-xs sm:text-sm font-bold text-white truncate">
+                    Configurar Worker
+                  </h3>
+                  <p className="text-[11px] text-indigo-300 truncate">
+                    {configWorker.name} <span className="text-slate-500">({configWorker.id})</span>
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <h3 className="text-sm font-bold text-white truncate">
-                  Configurar Worker
-                </h3>
-                <p className="text-xs text-indigo-300 truncate mt-0.5">
-                  {configWorker.name} ({configWorker.id})
-                </p>
-              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setConfigModalOpen(false);
+                  setConfigWorker(null);
+                }}
+                className="w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-all cursor-pointer"
+                title="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <form onSubmit={handleSaveConfig} className="space-y-4">
-              {/* Concorrência (Threads) */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Concorrência (Threads Paralelas)
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={configForm.concurrency}
-                    onChange={(e) =>
-                      setConfigForm({ ...configForm, concurrency: Number(e.target.value) })
-                    }
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-indigo-500 transition-colors"
-                    required
-                  />
+            {/* Form / Conteúdo com rolagem suave */}
+            <form onSubmit={handleSaveConfig} className="p-4 sm:p-5 space-y-3.5 overflow-y-auto flex-1 text-xs">
+              {/* Concorrência em linha compacta */}
+              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-200">
+                    Concorrência Paralela
+                  </label>
+                  <p className="text-[10px] text-slate-400">
+                    Tarefas simultâneas processadas (1 a 50)
+                  </p>
                 </div>
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Quantidade de tarefas processadas simultaneamente por este worker (1 a 50).
-                </p>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={configForm.concurrency}
+                  onChange={(e) =>
+                    setConfigForm({ ...configForm, concurrency: Number(e.target.value) })
+                  }
+                  className="w-20 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-center font-mono font-bold text-xs focus:outline-none focus:border-indigo-500 transition-colors"
+                  required
+                />
               </div>
 
-              {/* Seção Condicional: Para Workers de Rotina/Relatórios/Saúde (Sem Evolution API) */}
-              {configWorker.id === "w-reports-01" || configWorker.id === "w-cron-01" || configWorker.id === "w-health-01" ? (
-                <div className="p-4 rounded-xl bg-slate-950/80 border border-indigo-500/20 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-300">
-                        <Clock className="w-4 h-4 text-indigo-400 shrink-0" />
-                        <span>Agendamento Automático de Rotinas</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400">
-                        {configWorker.id === "w-health-01"
-                          ? "Intervalo de coleta de telemetria, integridade do banco MySQL, Redis e serviços."
-                          : configWorker.id === "w-reports-01"
-                          ? "Consolidação periódica de visualizações, cliques, métricas e envios."
-                          : "Rotinas periódicas de auditoria de planos e housekeeping."}
-                      </p>
+              {/* Seção Condicional: Rotinas Periódicas */}
+              {(configWorker.id === "w-reports-01" || configWorker.id === "w-cron-01" || configWorker.id === "w-health-01" || configWorker.id === "w-groups-01") && (
+                <div className="p-3.5 rounded-xl bg-slate-950/70 border border-indigo-500/25 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-300">
+                      <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      <span>Agendamento Automático</span>
                     </div>
 
                     <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -913,18 +947,15 @@ export default function SaWorkersPage() {
                         }
                         className="sr-only peer"
                       />
-                      <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                      <div className="w-8 h-4.5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-indigo-600"></div>
                     </label>
                   </div>
 
                   {configForm.schedule_enabled && (
-                    <div className="space-y-2 pt-2 border-t border-slate-800/80">
-                      <label className="block text-[11px] font-medium text-slate-300">
-                        {configWorker?.id === "w-health-01" ? "Intervalo de Execução (Segundos / Tempo Quase Real)" : "Intervalo de Execução (Minutos)"}
-                      </label>
+                    <div className="space-y-2.5 pt-2 border-t border-slate-800/80">
                       {configWorker?.id === "w-health-01" ? (
                         <>
-                          <div className="grid grid-cols-4 gap-2">
+                          <div className="grid grid-cols-4 gap-1.5">
                             {[15, 30, 45, 60].map((secs) => (
                               <button
                                 key={secs}
@@ -936,9 +967,9 @@ export default function SaWorkersPage() {
                                     schedule_interval_minutes: Math.max(1, Math.round(secs / 60)),
                                   })
                                 }
-                                className={`py-1.5 px-2 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer ${
+                                className={`py-1 px-1.5 rounded-lg text-[11px] font-mono font-bold border transition-all cursor-pointer ${
                                   configForm.schedule_interval_seconds === secs
-                                    ? "bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-600/30"
+                                    ? "bg-indigo-600 text-white border-indigo-500 shadow-sm"
                                     : "bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200"
                                 }`}
                               >
@@ -947,13 +978,8 @@ export default function SaWorkersPage() {
                             ))}
                           </div>
 
-                          <div className="pt-2">
-                            <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
-                              <span>Personalizado (segundos, mín. 15s):</span>
-                              <span className="font-mono text-indigo-300 font-bold">
-                                {configForm.schedule_interval_seconds}s
-                              </span>
-                            </div>
+                          <div className="flex items-center justify-between gap-2 pt-1">
+                            <span className="text-[11px] text-slate-400">Personalizado (segundos):</span>
                             <input
                               type="number"
                               min={15}
@@ -967,25 +993,17 @@ export default function SaWorkersPage() {
                                   schedule_interval_minutes: Math.max(1, Math.round(s / 60)),
                                 });
                               }}
-                              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                              className="w-24 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-white text-right font-mono text-xs focus:outline-none focus:border-indigo-500"
                               required
                             />
                           </div>
                         </>
                       ) : (
-                        <div className="space-y-3 pt-1">
-                          <div className="flex items-center justify-between text-[11px] text-slate-400">
-                            <span>Definir Intervalo de Repetição:</span>
-                            <span className="font-mono text-indigo-300 font-bold">
-                              {configForm.schedule_interval_minutes} minuto(s) total ({configForm.schedule_interval_seconds}s)
-                            </span>
-                          </div>
-
+                        <div className="space-y-2">
                           <div className="grid grid-cols-2 gap-2">
-                            {/* Caixa para informar o valor numérico */}
                             <div>
                               <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
-                                Valor (Mín. 1)
+                                Intervalo
                               </label>
                               <input
                                 type="number"
@@ -1003,15 +1021,14 @@ export default function SaWorkersPage() {
                                     schedule_interval_seconds: totalMins * 60,
                                   });
                                 }}
-                                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
                                 required
                               />
                             </div>
 
-                            {/* Combo para escolher entre minuto, hora ou dia */}
                             <div>
                               <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
-                                Unidade de Tempo
+                                Unidade
                               </label>
                               <select
                                 value={scheduleUnit}
@@ -1026,86 +1043,85 @@ export default function SaWorkersPage() {
                                     schedule_interval_seconds: totalMins * 60,
                                   });
                                 }}
-                                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
                               >
-                                <option value="minutes" className="bg-slate-900 text-white">Minuto(s)</option>
-                                <option value="hours" className="bg-slate-900 text-white">Hora(s)</option>
-                                <option value="days" className="bg-slate-900 text-white">Dia(s)</option>
+                                <option value="minutes">Minutos</option>
+                                <option value="hours">Horas</option>
+                                <option value="days">Dias</option>
                               </select>
                             </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800">
+                            <span className="text-slate-400">Total calculado:</span>
+                            <span className="font-mono font-bold text-indigo-300">
+                              A cada {scheduleValue} {scheduleUnit === "days" ? (scheduleValue === 1 ? "dia" : "dias") : scheduleUnit === "hours" ? (scheduleValue === 1 ? "hora" : "horas") : (scheduleValue === 1 ? "minuto" : "minutos")} ({configForm.schedule_interval_minutes}m)
+                            </span>
                           </div>
                         </div>
                       )}
                     </div>
                   )}
-
-                  <p className="text-[10px] text-slate-400 leading-relaxed bg-slate-900/50 p-2.5 rounded-lg border border-slate-800">
-                    💡 <strong>Sem Evolution API:</strong> Este worker processa cálculos internos do banco de dados e estatísticas do SaaS sem interagir com instâncias de WhatsApp, não necessitando de Anti-Ban Jitter ou pausas de lotes de mensagens.
-                  </p>
                 </div>
-              ) : (
-                <>
-                  {/* Intervalo Randomizado (Anti-Ban Jitter) */}
-                  <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+              )}
+
+              {/* Seção Anti-Ban e Lotes Compacta (para WhatsApp Messages e WhatsApp Groups Sync) */}
+              {configWorker.id !== "w-reports-01" && configWorker.id !== "w-cron-01" && configWorker.id !== "w-health-01" && (
+                <div className="p-3.5 rounded-xl bg-slate-950/70 border border-amber-500/20 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
-                      <Clock className="w-4 h-4 text-amber-400 shrink-0" />
-                      <span>Intervalo Anti-Ban (Jitter Randomizado)</span>
+                      <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>Proteção Anti-Ban & Controle de Lotes</span>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                          Mínimo (segundos)
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={300}
-                          value={configForm.min_delay_seconds}
-                          onChange={(e) =>
-                            setConfigForm({
-                              ...configForm,
-                              min_delay_seconds: Number(e.target.value),
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-amber-500"
-                          required
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                          Máximo (segundos)
-                        </label>
-                        <input
-                          type="number"
-                          min={configForm.min_delay_seconds}
-                          max={600}
-                          value={configForm.max_delay_seconds}
-                          onChange={(e) =>
-                            setConfigForm({
-                              ...configForm,
-                              max_delay_seconds: Number(e.target.value),
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-amber-500"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <p className="text-[10px] text-slate-400 leading-relaxed">
-                      A cada disparo, o worker fará uma pausa aleatória entre{" "}
-                      <strong className="text-amber-300">{configForm.min_delay_seconds}s</strong> e{" "}
-                      <strong className="text-amber-300">{configForm.max_delay_seconds}s</strong> para simular comportamento humano.
-                    </p>
+                    <span className="text-[10px] font-mono text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                      {configForm.min_delay_seconds}s ~ {configForm.max_delay_seconds}s jitter
+                    </span>
                   </div>
 
-                  {/* Lotes e Pausa Periódica */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
                     <div>
-                      <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                        Tamanho do Lote (msgs)
+                      <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1" title="Delay mínimo randômico em segundos">
+                        Delay Mín (s)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={300}
+                        value={configForm.min_delay_seconds}
+                        onChange={(e) =>
+                          setConfigForm({
+                            ...configForm,
+                            min_delay_seconds: Number(e.target.value),
+                          })
+                        }
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:outline-none focus:border-amber-500"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1" title="Delay máximo randômico em segundos">
+                        Delay Máx (s)
+                      </label>
+                      <input
+                        type="number"
+                        min={configForm.min_delay_seconds}
+                        max={600}
+                        value={configForm.max_delay_seconds}
+                        onChange={(e) =>
+                          setConfigForm({
+                            ...configForm,
+                            max_delay_seconds: Number(e.target.value),
+                          })
+                        }
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:outline-none focus:border-amber-500"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1" title="Quantidade de tarefas antes de pausar">
+                        Tam. Lote
                       </label>
                       <input
                         type="number"
@@ -1115,15 +1131,14 @@ export default function SaWorkersPage() {
                         onChange={(e) =>
                           setConfigForm({ ...configForm, batch_size: Number(e.target.value) })
                         }
-                        className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
                         required
                       />
-                      <p className="text-[10px] text-slate-500 mt-1">Disparos antes da pausa</p>
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                        Pausa do Lote (segundos)
+                      <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1" title="Tempo de descanso entre lotes em segundos">
+                        Pausa Lote (s)
                       </label>
                       <input
                         type="number"
@@ -1136,16 +1151,20 @@ export default function SaWorkersPage() {
                             batch_pause_seconds: Number(e.target.value),
                           })
                         }
-                        className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
                         required
                       />
-                      <p className="text-[10px] text-slate-500 mt-1">Descanso entre lotes</p>
                     </div>
                   </div>
-                </>
+
+                  <p className="text-[10px] text-slate-400 leading-tight">
+                    Pausa randômica de <strong className="text-amber-300">{configForm.min_delay_seconds}s-{configForm.max_delay_seconds}s</strong> por item e descanso de <strong className="text-indigo-300">{configForm.batch_pause_seconds}s</strong> a cada <strong className="text-indigo-300">{configForm.batch_size}</strong> execuções.
+                  </p>
+                </div>
               )}
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+              {/* Botões de Ação */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => {
@@ -1153,7 +1172,7 @@ export default function SaWorkersPage() {
                     setConfigWorker(null);
                   }}
                   disabled={savingConfig}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer whitespace-nowrap shrink-0"
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer whitespace-nowrap shrink-0"
                 >
                   Cancelar
                 </button>
@@ -1161,7 +1180,7 @@ export default function SaWorkersPage() {
                 <button
                   type="submit"
                   disabled={savingConfig}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-50"
                 >
                   {savingConfig ? (
                     <>

@@ -179,11 +179,11 @@ export async function GET() {
     const currentViews = Number(company?.current_views_count || 0);
     const currentLeads = Number(company?.current_leads_count || 0);
 
-    const limitGroups = Number(company?.sub_max_groups || company?.plan_max_groups || company?.max_groups || 10);
-    const limitProducts = Number(company?.sub_max_products || company?.plan_max_products || company?.max_products || 50);
-    const limitMessagesDay = Number(company?.sub_max_messages_day || company?.plan_max_messages_day || company?.max_messages_day || 5000);
-    const limitViews = Number(company?.sub_max_views || company?.plan_max_views || company?.max_views || 10000);
-    const limitLeads = Number(company?.sub_max_leads || company?.plan_max_leads || company?.max_leads || 1000);
+    const limitGroups = Number(company?.sub_max_groups ?? company?.plan_max_groups ?? company?.max_groups ?? 0);
+    const limitProducts = Number(company?.sub_max_products ?? company?.plan_max_products ?? company?.max_products ?? 0);
+    const limitMessagesDay = Number(company?.sub_max_messages_day ?? company?.plan_max_messages_day ?? company?.max_messages_day ?? 0);
+    const limitViews = Number(company?.sub_max_views ?? company?.plan_max_views ?? company?.max_views ?? 0);
+    const limitLeads = Number(company?.sub_max_leads ?? company?.plan_max_leads ?? company?.max_leads ?? 0);
 
     const sendsToday = Number(jobsTodayRows[0]?.sends_today || 0);
 

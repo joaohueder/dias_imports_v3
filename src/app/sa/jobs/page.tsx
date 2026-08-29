@@ -18,6 +18,9 @@ import {
   Eye,
   Search,
   Filter,
+  X,
+  Check,
+  AlertCircle,
 } from "lucide-react";
 import { SaPageHeader } from "@/components/sa/SaPageHeader";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
@@ -71,6 +74,8 @@ export default function SaJobsPage() {
 
   // Modal para enfileirar nova tarefa de teste/produção
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
+  const [selectedPurgeStatuses, setSelectedPurgeStatuses] = useState<string[]>(["completed"]);
   const [selectedJobDetails, setSelectedJobDetails] = useState<JobItem | null>(null);
   const [availableInstances, setAvailableInstances] = useState<Array<{ id: number; name: string; whatsapp_number: string; is_default: boolean; status: string }>>([]);
   const [loadingInstances, setLoadingInstances] = useState(false);
@@ -193,17 +198,26 @@ export default function SaJobsPage() {
     }
   };
 
-  const handlePurgeCompleted = async () => {
+  const handleExecutePurge = async () => {
+    if (selectedPurgeStatuses.length === 0) {
+      showError("Selecione pelo menos um status para limpar.", "Nenhum Status Selecionado");
+      return;
+    }
+
     setActionLoading("purge");
     try {
       const res = await fetch("/api/sa/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "purge_completed" }),
+        body: JSON.stringify({
+          action: "purge_jobs",
+          statuses: selectedPurgeStatuses,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao limpar histórico");
-      showSuccess(data.message || "Histórico limpo com sucesso!", "Tarefas Limpas");
+      showSuccess(data.message || "Tarefas removidas com sucesso!", "Tarefas Limpas");
+      setIsPurgeModalOpen(false);
       await fetchJobsData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Erro na operação";
@@ -211,6 +225,12 @@ export default function SaJobsPage() {
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const togglePurgeStatus = (status: string) => {
+    setSelectedPurgeStatuses((prev) =>
+      prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]
+    );
   };
 
   const handleProcessQueueNow = async () => {
@@ -338,13 +358,13 @@ export default function SaJobsPage() {
 
                 <button
                   type="button"
-                  onClick={handlePurgeCompleted}
+                  onClick={() => setIsPurgeModalOpen(true)}
                   disabled={actionLoading === "purge"}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition-all whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-50"
-                  title="Limpar tarefas com status concluído"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 transition-all whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-50"
+                  title="Limpar tarefas da fila por status"
                 >
-                  <Trash2 className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-                  <span className="whitespace-nowrap">Limpar Concluídas</span>
+                  <Trash2 className="w-3.5 h-3.5 shrink-0 text-rose-400" />
+                  <span className="whitespace-nowrap">Limpar Tarefas</span>
                 </button>
               </>
             )}
@@ -603,9 +623,15 @@ export default function SaJobsPage() {
                           >
                             <div className="flex items-center gap-1.5 min-w-0 font-mono text-[11px] text-slate-400">
                               <Eye className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                              <span className="truncate">
-                                {JSON.stringify(job.data)}
-                              </span>
+                              <div className="min-w-0 truncate">
+                                <div className="truncate text-slate-200">
+                                  {String(job.data.companyName || (job.data.company as { name?: string } | undefined)?.name || "Empresa não informada")}
+                                </div>
+                                <div className="truncate text-[10px] text-slate-500">
+                                  {String(job.data.group_name || (job.data.group as { name?: string } | undefined)?.name || "Grupo não informado")}
+                                  {job.data.instanceName ? ` · ${String(job.data.instanceName)}` : ""}
+                                </div>
+                              </div>
                             </div>
                             <span className="text-[9px] uppercase font-bold text-indigo-400/90 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 whitespace-nowrap shrink-0">
                               JSON
@@ -759,6 +785,31 @@ export default function SaJobsPage() {
                   <span className="text-slate-200 font-bold">{selectedJobDetails.duration_ms ? `${selectedJobDetails.duration_ms} ms` : "--"}</span>
                 </div>
               </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                  <span className="text-[10px] text-slate-500 uppercase block">Empresa</span>
+                  <span className="text-slate-200 font-semibold truncate block">{String(selectedJobDetails.data.companyName || (selectedJobDetails.data.company as { name?: string } | undefined)?.name || "Não informada")}</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                  <span className="text-[10px] text-slate-500 uppercase block">Instância</span>
+                  <span className="text-slate-200 font-semibold truncate block">{String(selectedJobDetails.data.instanceName || (selectedJobDetails.data.instance as { name?: string } | undefined)?.name || "Não informada")}</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                  <span className="text-[10px] text-slate-500 uppercase block">Grupo</span>
+                  <span className="text-slate-200 font-semibold truncate block">{String(selectedJobDetails.data.group_name || (selectedJobDetails.data.group as { name?: string } | undefined)?.name || "Não informado")}</span>
+                </div>
+              </div>
+
+              {Boolean(selectedJobDetails.data.execution) && (
+                <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-200">
+                  <span className="text-[10px] font-bold uppercase tracking-wider block text-indigo-300 mb-1">O que foi feito</span>
+                  <p className="text-xs leading-relaxed">{String((selectedJobDetails.data.execution as { description?: string }).description || "Execução registrada")}</p>
+                  {(selectedJobDetails.data.execution as { updatedCount?: number }).updatedCount !== undefined && (
+                    <p className="text-[11px] text-indigo-300 mt-1">Registros atualizados: {String((selectedJobDetails.data.execution as { updatedCount?: number }).updatedCount)}</p>
+                  )}
+                </div>
+              )}
 
               {selectedJobDetails.failedReason && (
                 <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300">
@@ -972,6 +1023,164 @@ export default function SaJobsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 6. MODAL DE LIMPEZA DE TAREFAS POR STATUS */}
+      {isPurgeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">
+                    Limpar Tarefas da Fila
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Selecione quais status deseja remover
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPurgeModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              {[
+                {
+                  id: "completed",
+                  label: "Tarefas Concluídas",
+                  desc: "Tarefas finalizadas com sucesso",
+                  count: stats?.totalCompleted || 0,
+                  color: "text-emerald-400",
+                  badge: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
+                },
+                {
+                  id: "failed",
+                  label: "Tarefas com Falha",
+                  desc: "Tarefas que esgotaram tentativas com erro",
+                  count: stats?.totalFailed || 0,
+                  color: "text-rose-400",
+                  badge: "bg-rose-500/10 text-rose-300 border-rose-500/30",
+                },
+                {
+                  id: "waiting",
+                  label: "Tarefas Aguardando",
+                  desc: "Tarefas na fila ainda não iniciadas",
+                  count: stats?.totalWaiting || 0,
+                  color: "text-amber-400",
+                  badge: "bg-amber-500/10 text-amber-300 border-amber-500/30",
+                },
+                {
+                  id: "delayed",
+                  label: "Tarefas Agendadas / Delayed",
+                  desc: "Tarefas com disparo agendado para o futuro",
+                  count: stats?.totalDelayed || 0,
+                  color: "text-purple-400",
+                  badge: "bg-purple-500/10 text-purple-300 border-purple-500/30",
+                },
+              ].map((item) => {
+                const isSelected = selectedPurgeStatuses.includes(item.id);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => togglePurgeStatus(item.id)}
+                    className={`w-full p-3 rounded-xl border flex items-center justify-between text-left transition-all cursor-pointer ${
+                      isSelected
+                        ? "bg-indigo-500/10 border-indigo-500/40 text-white"
+                        : "bg-slate-950/40 border-slate-800 text-slate-400 hover:border-slate-700"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+                          isSelected
+                            ? "bg-indigo-600 border-indigo-500 text-white"
+                            : "border-slate-700 bg-slate-900"
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3.5 h-3.5" />}
+                      </div>
+                      <div>
+                        <p className={`font-semibold text-xs ${isSelected ? "text-white" : "text-slate-300"}`}>
+                          {item.label}
+                        </p>
+                        <p className="text-[10px] text-slate-500">
+                          {item.desc}
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${item.badge}`}>
+                      {item.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300/90 text-[11px] flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <span>Esta ação removerá permanentemente os registros do banco de dados das tarefas selecionadas.</span>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPurgeStatuses(["completed", "failed", "waiting", "delayed"])}
+                  className="text-[11px] text-slate-400 hover:text-indigo-300 underline cursor-pointer"
+                >
+                  Selecionar Todos
+                </button>
+                <span className="text-slate-600">•</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPurgeStatuses([])}
+                  className="text-[11px] text-slate-400 hover:text-rose-300 underline cursor-pointer"
+                >
+                  Desmarcar
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPurgeModalOpen(false)}
+                  disabled={actionLoading === "purge"}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecutePurge}
+                  disabled={actionLoading === "purge" || selectedPurgeStatuses.length === 0}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/30 transition-all cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-50"
+                >
+                  {actionLoading === "purge" ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+                      <span>Limpando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Limpar ({selectedPurgeStatuses.length})</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

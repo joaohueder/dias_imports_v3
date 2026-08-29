@@ -90,6 +90,7 @@ const navigationItems: NavigationGroup[] = [
       { name: "Landing Page Grupo", href: "/painel/grupos/landing-page", icon: Sparkles, badge: null, module: "landing-page-grupo" },
       { name: "Produtos & Ofertas", href: "/painel/produtos", icon: Package, badge: null, module: "produtos" },
       { name: "Gestão de Leads", href: "/painel/leads", icon: UserCheck, badge: null, module: "leads" },
+      { name: "Tarefas & Disparos", href: "/painel/tarefas", icon: Layers, badge: null, module: "tarefas" },
     ],
   },
   {

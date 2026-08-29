@@ -61,7 +61,7 @@ export async function POST(
       );
     }
 
-    const limitDaily = Number(activeSub.plan_snapshot_max_messages_day ?? activeSub.plan_max_messages_day ?? 1000);
+    const limitDaily = Number(activeSub.plan_snapshot_max_messages_day ?? activeSub.plan_max_messages_day ?? 0);
 
     // Busca grupos ativos aptos para envio de mensagens (abertos / permitidos)
     let groupQuery = `SELECT id, whatsapp_group_id, name, instance_id FROM company_whatsapp_groups WHERE company_id = ? AND status = 'active' AND group_type != 'closed' AND can_send_messages NOT IN ('admin_only', 'admin')`;
