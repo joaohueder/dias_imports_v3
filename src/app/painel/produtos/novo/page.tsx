@@ -148,10 +148,14 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
   const [newBenefit, setNewBenefit] = useState("");
   const [croppingImageSrc, setCroppingImageSrc] = useState<string | null>(null);
   const [isCropperOpen, setIsCropperOpen] = useState(false);
+  const [imageQueue, setImageQueue] = useState<string[]>([]);
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
   const [isCtaIconPickerOpen, setIsCtaIconPickerOpen] = useState(false);
   const [isHeadlinePickerOpen, setIsHeadlinePickerOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+
+  const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
+  const [dragOverImageIndex, setDragOverImageIndex] = useState<number | null>(null);
 
   // Verificação de limites de plano para novos produtos
   const [limitReached, setLimitReached] = useState(false);
@@ -298,16 +302,43 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const file = files[0];
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setCroppingImageSrc(reader.result);
+    const fileList = Array.from(files);
+    const readers = fileList.map((file) => {
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === "string") {
+            resolve(reader.result);
+          } else {
+            resolve("");
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(readers).then((results) => {
+      const validImages = results.filter((src) => Boolean(src));
+      if (validImages.length > 0) {
+        setCroppingImageSrc(validImages[0]);
+        setImageQueue(validImages.slice(1));
         setIsCropperOpen(true);
       }
-    };
-    reader.readAsDataURL(file);
+    });
+
     e.target.value = "";
+  };
+
+  const handleCloseCropper = () => {
+    if (imageQueue.length > 0) {
+      const nextImage = imageQueue[0];
+      setImageQueue((prev) => prev.slice(1));
+      setCroppingImageSrc(nextImage);
+      setIsCropperOpen(true);
+    } else {
+      setIsCropperOpen(false);
+      setCroppingImageSrc(null);
+    }
   };
 
   const handleCroppedUpload = async (blob: Blob) => {
@@ -336,6 +367,16 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
       }
     } catch {
       showError("Erro ao enviar imagem para o servidor.", "Falha de Rede");
+    } finally {
+      if (imageQueue.length > 0) {
+        const nextImage = imageQueue[0];
+        setImageQueue((prev) => prev.slice(1));
+        setCroppingImageSrc(nextImage);
+        setIsCropperOpen(true);
+      } else {
+        setIsCropperOpen(false);
+        setCroppingImageSrc(null);
+      }
     }
   };
 
@@ -355,13 +396,45 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
     setIsDirty(true);
   };
 
-  // Drag and Drop para reordenar a galeria de imagens
-  const handleReorderImages = (reorderedImages: string[]) => {
+  // HTML5 Drag and Drop para reordenar a galeria de imagens
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedImageIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", index.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverImageIndex !== index) {
+      setDragOverImageIndex(index);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedImageIndex === null || draggedImageIndex === targetIndex) {
+      setDraggedImageIndex(null);
+      setDragOverImageIndex(null);
+      return;
+    }
+
+    const nextImages = [...formData.images];
+    const [movedItem] = nextImages.splice(draggedImageIndex, 1);
+    nextImages.splice(targetIndex, 0, movedItem);
+
     setFormData((prev) => ({
       ...prev,
-      images: reorderedImages,
+      images: nextImages,
     }));
     setIsDirty(true);
+    setDraggedImageIndex(null);
+    setDragOverImageIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedImageIndex(null);
+    setDragOverImageIndex(null);
   };
 
   const handleAddBenefit = () => {
@@ -1344,93 +1417,87 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    <Reorder.Group
-                      axis="x"
-                      values={formData.images}
-                      onReorder={handleReorderImages}
-                      className="contents"
-                    >
-                      {formData.images.map((img, idx) => {
-                        const isCover = formData.cover_image === img;
+                    {formData.images.map((img, idx) => {
+                      const isCover = formData.cover_image === img;
+                      const isDragging = draggedImageIndex === idx;
+                      const isOver = dragOverImageIndex === idx && !isDragging;
 
-                        return (
-                          <Reorder.Item
-                            key={img}
-                            value={img}
-                            whileDrag={{
-                              scale: 1.05,
-                              zIndex: 99,
-                              cursor: "grabbing",
-                              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.7), 0 0 15px rgba(99, 102, 241, 0.4)",
-                            }}
-                            layout
-                            transition={{
-                              type: "spring",
-                              damping: 30,
-                              stiffness: 400,
-                            }}
-                            className={`relative group aspect-square rounded-2xl overflow-hidden border-2 bg-slate-900 cursor-grab active:cursor-grabbing select-none list-none shadow-md ${
-                              isCover ? "border-indigo-500 ring-2 ring-indigo-500/30" : "border-slate-800 hover:border-slate-700"
-                            }`}
-                          >
-                            <img src={img} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover pointer-events-none" />
-                            
-                            {/* Indicador de Ordem / Posição */}
-                            <div className="absolute bottom-2 right-2 bg-black/75 backdrop-blur-md text-slate-200 text-xs font-bold px-2 py-0.5 rounded-md border border-slate-700/50 pointer-events-none">
-                              #{idx + 1}
-                            </div>
+                      return (
+                        <div
+                          key={img}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, idx)}
+                          onDragOver={(e) => handleDragOver(e, idx)}
+                          onDrop={(e) => handleDrop(e, idx)}
+                          onDragEnd={handleDragEnd}
+                          className={`relative group aspect-square rounded-2xl overflow-hidden border-2 bg-slate-900 cursor-grab active:cursor-grabbing select-none transition-all duration-200 ${
+                            isDragging
+                              ? "opacity-30 scale-95 border-indigo-400 border-dashed"
+                              : isOver
+                              ? "border-indigo-400 ring-4 ring-indigo-500/30 scale-105"
+                              : isCover
+                              ? "border-indigo-500 ring-2 ring-indigo-500/30 shadow-lg shadow-indigo-500/10"
+                              : "border-slate-800 hover:border-slate-700 shadow-md"
+                          }`}
+                        >
+                          <img src={img} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover pointer-events-none" />
+                          
+                          {/* Indicador de Ordem / Posição */}
+                          <div className="absolute bottom-2 right-2 bg-black/75 backdrop-blur-md text-slate-200 text-xs font-bold px-2 py-0.5 rounded-md border border-slate-700/50 pointer-events-none">
+                            #{idx + 1}
+                          </div>
 
-                            {/* Handle visual de arraste */}
-                            <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-md text-slate-300 p-1.5 rounded-lg border border-slate-700/60 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow">
-                              <GripVertical className="w-4 h-4 text-indigo-400" />
-                            </div>
+                          {/* Handle visual de arraste */}
+                          <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-md text-slate-300 p-1.5 rounded-lg border border-slate-700/60 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow">
+                            <GripVertical className="w-4 h-4 text-indigo-400" />
+                          </div>
 
-                            <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-3 z-10 backdrop-blur-[2px]">
-                              {!isCover && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleChange("cover_image", img);
-                                  }}
-                                  className="w-full text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl cursor-pointer shadow transition-all active:scale-95"
-                                >
-                                  Definir Capa
-                                </button>
-                              )}
+                          <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-3 z-10 backdrop-blur-[2px]">
+                            {!isCover && (
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleRemoveImage(idx);
+                                  handleChange("cover_image", img);
                                 }}
-                                className="w-full text-xs font-semibold bg-rose-600/90 hover:bg-rose-500 text-white px-3 py-1.5 rounded-xl cursor-pointer shadow transition-all active:scale-95 flex items-center justify-center gap-1"
+                                className="w-full text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl cursor-pointer shadow transition-all active:scale-95"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                Remover
+                                Definir Capa
                               </button>
-                            </div>
-
-                            {isCover && (
-                              <div className="absolute top-2 left-2 bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow pointer-events-none z-10 flex items-center gap-1 uppercase tracking-wide">
-                                <Sparkles className="w-3 h-3" />
-                                Capa
-                              </div>
                             )}
-                          </Reorder.Item>
-                        );
-                      })}
-                    </Reorder.Group>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveImage(idx);
+                              }}
+                              className="w-full text-xs font-semibold bg-rose-600/90 hover:bg-rose-500 text-white px-3 py-1.5 rounded-xl cursor-pointer shadow transition-all active:scale-95 flex items-center justify-center gap-1"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Remover
+                            </button>
+                          </div>
+
+                          {isCover && (
+                            <div className="absolute top-2 left-2 bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow pointer-events-none z-10 flex items-center gap-1 uppercase tracking-wide">
+                              <Sparkles className="w-3 h-3" />
+                              Capa
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
 
                     <label className="aspect-square rounded-2xl border-2 border-dashed border-slate-700/80 hover:border-indigo-500/60 hover:bg-slate-800/40 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer text-slate-400 hover:text-indigo-300 group">
                       <div className="w-10 h-10 rounded-xl bg-slate-800 group-hover:bg-indigo-500/10 flex items-center justify-center text-slate-400 group-hover:text-indigo-400 transition-colors">
                         <Plus className="w-5 h-5" />
                       </div>
-                      <span className="text-xs font-semibold">Adicionar foto</span>
-                      <span className="text-[10px] text-slate-500">Até 20 MB</span>
+                      <span className="text-xs font-semibold">Adicionar fotos</span>
+                      <span className="text-[10px] text-slate-500">Múltiplos arquivos</span>
                       <input
                         type="file"
                         accept="image/*"
+                        multiple
                         onChange={handleImageSelected}
                         className="hidden"
                       />
@@ -1729,10 +1796,7 @@ export default function NovoProdutoPage({ productId }: { productId?: string }) {
           <ImageCropperModal
             isOpen={isCropperOpen}
             imageSrc={croppingImageSrc}
-            onClose={() => {
-              setIsCropperOpen(false);
-              setCroppingImageSrc(null);
-            }}
+            onClose={handleCloseCropper}
             onConfirm={handleCroppedUpload}
           />
         )}

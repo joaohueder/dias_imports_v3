@@ -74,12 +74,22 @@ export async function POST(req: NextRequest) {
       const scheduleEnabled = worker?.schedule_enabled === undefined || Boolean(worker.schedule_enabled);
 
       if (!hasPendingJob && scheduleEnabled && elapsedSeconds >= intervalSeconds) {
-        await enqueueJob("cron-subscriptions", "verify_subscriptions", {
-          action: "verify_subscriptions",
-          actionLabel: "Verificar e expirar assinaturas vencidas",
-          trigger: isInternalDaemon ? "daemon" : "manual",
-          createdBy: isInternalDaemon ? "worker-daemon" : "sa-user",
-        });
+        // Enfileira com trava atômica garantindo que nenhuma outra requisição simultânea crie duplicata
+        const [stillPending] = await pool.query<RowDataPacket[]>(
+          `SELECT id FROM background_jobs 
+           WHERE queue_name = ? AND name = 'verify_subscriptions' AND (status = 'waiting' OR status = 'active' OR created_at >= DATE_SUB(NOW(), INTERVAL ? SECOND))
+           LIMIT 1`,
+          [queueName, intervalSeconds]
+        );
+
+        if (stillPending.length === 0) {
+          await enqueueJob("cron-subscriptions", "verify_subscriptions", {
+            action: "verify_subscriptions",
+            actionLabel: "Verificar e expirar assinaturas vencidas",
+            trigger: isInternalDaemon ? "daemon" : "manual",
+            createdBy: isInternalDaemon ? "worker-daemon" : "sa-user",
+          });
+        }
       }
 
       const job = await dequeueJob("cron-subscriptions");
