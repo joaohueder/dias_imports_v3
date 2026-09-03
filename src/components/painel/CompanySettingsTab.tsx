@@ -12,6 +12,10 @@ import {
   AlertCircle,
   Copy,
   Search,
+  Key,
+  Shield,
+  CheckCircle2,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
@@ -25,6 +29,15 @@ import {
   validateEmail,
 } from "@/lib/validators";
 
+interface BackupCodeItem {
+  code: string;
+  usage_count?: number;
+  last_used_at?: string | null;
+  used?: boolean;
+  used_at?: string | null;
+  created_at: string;
+}
+
 interface CompanyData {
   id: number;
   name: string;
@@ -34,6 +47,7 @@ interface CompanyData {
   phone?: string | null;
   whatsapp?: string | null;
   admin_whatsapp?: string | null;
+  backup_codes?: BackupCodeItem[] | string | null;
   plan?: string | null;
   status?: string | null;
   current_plan_name?: string | null;
@@ -74,6 +88,9 @@ export function CompanySettingsTab({ onUpdated }: CompanySettingsTabProps) {
 
   const [initialData, setInitialData] = useState<typeof formData | null>(null);
   const [companyPlan, setCompanyPlan] = useState("Iniciante");
+  const [backupCodes, setBackupCodes] = useState<BackupCodeItem[]>([]);
+  const [loadingBackupCodes, setLoadingBackupCodes] = useState(false);
+  const [isRegeneratingCodes, setIsRegeneratingCodes] = useState(false);
   const [isCheckingAdminWa, setIsCheckingAdminWa] = useState(false);
   const [errors, setErrors] = useState<{
     document?: string;
@@ -123,6 +140,13 @@ export function CompanySettingsTab({ onUpdated }: CompanySettingsTabProps) {
       if (res.ok && data.success && data.company) {
         const c: CompanyData = data.company;
         setCompanyPlan(c.current_plan_name || c.plan || "Iniciante");
+        
+        let codes: BackupCodeItem[] = [];
+        if (c.backup_codes) {
+          codes = typeof c.backup_codes === "string" ? JSON.parse(c.backup_codes) : c.backup_codes;
+        }
+        setBackupCodes(Array.isArray(codes) ? codes : []);
+
         const loadedData = {
           name: c.name || "",
           trade_name: c.trade_name || "",
@@ -284,6 +308,70 @@ export function CompanySettingsTab({ onUpdated }: CompanySettingsTabProps) {
     if (cepDigits.length === 8) {
       handleSearchCep(cepDigits);
     }
+  };
+
+  const handleRegenerateBackupCodes = async () => {
+    if (!confirm("Atenção: Ao gerar novos códigos reservas, os códigos anteriores serão invalidados imediatamente. Deseja continuar?")) {
+      return;
+    }
+    try {
+      setIsRegeneratingCodes(true);
+      const res = await fetch("/api/painel/empresa/backup-codes", {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.backup_codes) {
+        setBackupCodes(data.backup_codes);
+        toast.success("Novos códigos reservas gerados com sucesso!");
+      } else {
+        toast.error(data.error || "Erro ao regenerar códigos reservas.");
+      }
+    } catch {
+      toast.error("Erro de conexão ao regenerar códigos.");
+    } finally {
+      setIsRegeneratingCodes(false);
+    }
+  };
+
+  const handleCopyBackupCodes = () => {
+    if (!backupCodes.length) return;
+    const text = backupCodes
+      .map((c, i) => `${i + 1}. ${c.code} ${c.usage_count ? `(${c.usage_count}x acessado)` : "(DISPONÍVEL)"}`)
+      .join("\n");
+    navigator.clipboard.writeText(`CÓDIGOS RESERVAS DE ACESSO - DIAS IMPORTS\n\n${text}\n\nGuarde estes códigos em local seguro.`);
+    toast.success("Códigos reservas copiados para a área de transferência!");
+  };
+
+  const handleDownloadBackupCodes = () => {
+    if (!backupCodes.length) return;
+    const text = backupCodes
+      .map((c, i) => `${i + 1}. ${c.code} ${c.usage_count ? `(Utilizado ${c.usage_count} vez(es) - Último: ${c.last_used_at || c.used_at})` : "(DISPONÍVEL)"}`)
+      .join("\n");
+    const content = `=====================================================
+CÓDIGOS RESERVAS DE ACESSO - PAINEL DA EMPRESA
+Empresa: ${formData.name || "Empresa"}
+Data de Emissão: ${new Date().toLocaleString("pt-BR")}
+=====================================================
+
+INFORMAÇÕES DE USO:
+- Estes códigos NÃO possuem prazo de validade.
+- Podem ser reutilizados mais de uma vez sempre que necessário.
+- Use estes códigos para acessar o painel caso o WhatsApp ou a
+  instância padrão estejam indisponíveis.
+
+${text}
+
+=====================================================
+Guarde este arquivo em local seguro e confidencial.
+=====================================================`;
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `codigos-reserva-${(formData.name || "empresa").toLowerCase().replace(/[^a-z0-9]/g, "-")}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Arquivo de códigos reservas baixado com sucesso!");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -646,6 +734,89 @@ export function CompanySettingsTab({ onUpdated }: CompanySettingsTabProps) {
                 className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 uppercase"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Seção 3: Códigos Reservas de Emergência */}
+        <div className="rounded-2xl bg-[#090f1d]/90 border border-slate-800/80 p-6 shadow-xl shadow-black/20 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <Key className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  Códigos Reservas de Acesso (Emergência)
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-semibold">
+                    10 Códigos
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Utilize estes códigos caso a instância padrão do WhatsApp esteja temporariamente desconectada.
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCopyBackupCodes}
+                className="px-3 py-1.5 text-xs font-medium rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+                title="Copiar lista de códigos"
+              >
+                <Copy className="w-3.5 h-3.5 text-slate-400" />
+                Copiar
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadBackupCodes}
+                className="px-3 py-1.5 text-xs font-medium rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+                title="Baixar arquivo TXT"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-400" />
+                Baixar TXT
+              </button>
+              <button
+                type="button"
+                onClick={handleRegenerateBackupCodes}
+                disabled={isRegeneratingCodes}
+                className="px-3 py-1.5 text-xs font-medium rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition-colors flex items-center gap-1.5 cursor-pointer"
+                title="Gerar novos códigos"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRegeneratingCodes ? "animate-spin" : ""}`} />
+                {isRegeneratingCodes ? "Gerando..." : "Regenerar"}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+            {backupCodes.map((item, idx) => (
+              <div
+                key={idx}
+                className="p-3 rounded-xl border text-center transition-all bg-slate-900/90 border-slate-800 hover:border-slate-700 shadow-sm"
+              >
+                <div className="text-[10px] text-slate-500 mb-1 font-semibold flex items-center justify-center gap-1">
+                  <span>#{idx + 1}</span>
+                  {item.usage_count && item.usage_count > 0 ? (
+                    <span className="text-amber-400 font-bold text-[9px] uppercase">
+                      {item.usage_count}x usado
+                    </span>
+                  ) : (
+                    <span className="text-emerald-400 font-bold text-[9px] uppercase">Disponível</span>
+                  )}
+                </div>
+                <span className="font-mono font-bold text-xs tracking-wider block text-amber-300">
+                  {item.code}
+                </span>
+                {item.last_used_at || item.used_at ? (
+                  <span className="text-[9px] text-slate-500 block mt-1 truncate" title={`Último uso: ${item.last_used_at || item.used_at}`}>
+                    {new Date(item.last_used_at || item.used_at || "").toLocaleDateString("pt-BR")}
+                  </span>
+                ) : (
+                  <span className="text-[9px] text-slate-600 block mt-1">Nunca usado</span>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </form>

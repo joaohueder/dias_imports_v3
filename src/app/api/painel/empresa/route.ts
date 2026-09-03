@@ -42,9 +42,32 @@ export async function GET() {
       return NextResponse.json({ success: false, message: "Empresa não encontrada." }, { status: 404 });
     }
 
+    const companyData = rows[0];
+    let backupCodes = [];
+    if (companyData.backup_codes) {
+      try {
+        backupCodes = typeof companyData.backup_codes === "string"
+          ? JSON.parse(companyData.backup_codes)
+          : companyData.backup_codes;
+      } catch {}
+    }
+
+    // Se ainda não tiver códigos reservas gerados, gera automaticamente
+    if (!Array.isArray(backupCodes) || backupCodes.length === 0) {
+      const { generateBackupCodes } = await import("@/lib/backup-codes");
+      backupCodes = generateBackupCodes(10);
+      await pool.query(
+        "UPDATE companies SET backup_codes = ? WHERE id = ?",
+        [JSON.stringify(backupCodes), companyId]
+      );
+      companyData.backup_codes = backupCodes;
+    } else {
+      companyData.backup_codes = backupCodes;
+    }
+
     return NextResponse.json({
       success: true,
-      company: rows[0],
+      company: companyData,
     });
   } catch (error: any) {
     return NextResponse.json(

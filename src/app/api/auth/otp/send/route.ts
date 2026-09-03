@@ -99,9 +99,24 @@ export async function POST(request: Request) {
          ORDER BY is_default DESC, (status = 'connected') DESC, updated_at DESC LIMIT 1`
       );
 
+      const defaultInstance = defaultInstances[0];
+      const isInstanceConnected = defaultInstance?.status === "connected";
+
+      if (!isInstanceConnected) {
+        return NextResponse.json(
+          {
+            success: false,
+            instanceDisconnected: true,
+            message:
+              "O serviço de envio via WhatsApp (Instância Padrão) está desconectado. Utilize um dos seus Códigos Reservas de Emergência para acessar o painel da sua empresa.",
+          },
+          { status: 503 }
+        );
+      }
+
       // Na Evolution API v2.3.7 o identificador da rota de mensagem é o nome cadastrado da instância (instance.name)
-      const targetInstanceName = defaultInstances[0]?.name || defaultInstances[0]?.instance_key || "Instancia_Padrao_T0U1U";
-      const targetInstanceId = defaultInstances[0]?.id;
+      const targetInstanceName = defaultInstance.name || defaultInstance.instance_key || "Instancia_Padrao_T0U1U";
+      const targetInstanceId = defaultInstance.id;
 
       // Adiciona o DDI 55 caso o número não o contenha
       let targetPhone = cleanWhatsapp;

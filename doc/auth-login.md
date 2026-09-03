@@ -1,9 +1,9 @@
-﻿# MemÃ³ria do Projeto - Telas de AutenticaÃ§Ã£o
+﻿# Memória do Projeto - Telas de Autenticação
 
 ## 1. Dados do Projeto
 - **Nome do Sistema:** JH7 Marketing
 - **Descrição:** Gerenciamento de Marketing em Grupos de WhatsApp
-- **Versão Atual:** `2026.08.0009`
+- **Versão Atual:** `2026.08.0609`
 - **Rodapé:** Desenvolvido por JH7
 
 ## 2. Visão Geral
@@ -11,26 +11,35 @@ Telas de autenticação desenvolvidas com estética moderna/glassmorphism dark m
 
 ### A. Portal da Empresa (`/painel/login`)
 - **Paleta de Cores:** Tons esmeralda / teal / slate escuro.
-- **Método de Autenticação:** OTP (One-Time Password) via WhatsApp com código de 6 dígitos numéricos.
+- **Métodos de Autenticação Disponíveis:**
+  1. **OTP (One-Time Password) via WhatsApp:** Código numérico de 6 dígitos enviado através da instância padrão do WhatsApp configurada (válido por 10 minutos).
+  2. **Códigos Reservas de Emergência:** 10 códigos únicos (`XXXX-XXXX`) atribuídos à empresa. Os códigos **não expiram e podem ser utilizados mais de uma vez** (reutilizáveis).
 - **Fluxo do Usuário:**
-  1. Digita o WhatsApp corporativo cadastrado (com máscara automática).
-  2. Sistema valida existência e status ativo da empresa e do usuário.
-  3. Envia código temporário de 6 dígitos (válido por 10 minutos).
-  4. Usuário digita o código OTP recebido e acessa diretamente o `/painel`.
+  - Usuário pode alternar livremente entre "Via WhatsApp (OTP)" e "Via Código Reserva".
+  - Se a instância padrão estiver desconectada (`disconnected`), o sistema detecta automaticamente no envio de OTP e orienta/alterna o usuário para login com Códigos Reservas.
+  - Ao validar o código reserva com sucesso, o contador de uso do código é incrementado (`usage_count++`), a data de último uso registrada e a sessão autenticada da empresa é inicializada normalmente.
 
 ### B. Super Admin SaaS (`/sa/login`)
 - **Paleta de Cores:** Tons índigo / violeta / roxo profundo.
 - **Método de Autenticação:** E-mail e Senha de Super Admin (`joaohueder@gmail.com` / `123456`).
 - **Validação de Acesso:** Validação estrita via tabela `users` no MySQL para usuários com `role = 'SUPER_ADMIN'`. Redireciona para `/sa`.
 
-## 3. Cadastro e Unicidade de WhatsApp no Super Admin (`/sa/companies`)
-- Removido campo de telefone convencional.
-- **WhatsApp da Empresa:** Número institucional para contato e notificações gerais.
-- **WhatsApp de Acesso Admin:** Número exclusivo e obrigatório para autenticação OTP do administrador da empresa.
-- **Regra de Unicidade Global:** Validação no backend e frontend impedindo cadastrar o mesmo WhatsApp de acesso admin para mais de uma empresa em todo o sistema.
+## 3. Códigos Reservas por Empresa (`companies.backup_codes`)
+- Toda empresa criada no sistema recebe automaticamente 10 códigos reservas de 8 caracteres alfanuméricos com hífen (`XXXX-XXXX`).
+- **Reutilização & Validade:** Os códigos reservas **não possuem validade temporal e podem ser reutilizados múltiplas vezes**. Cada login via código incrementa o contador de acessos e salva o último horário de acesso.
+- Os códigos permanecem válidos até que o Super Admin ou o usuário da empresa clique em "Regenerar Códigos".
+- Os códigos são gerenciados tanto no **Super Admin** (`/sa/companies/[id]`) quanto nas **Configurações da Empresa** (`/painel/configuracoes/empresa`).
+- Ações suportadas:
+  - Visualização de status de cada código (Ativo vs Usado com data).
+  - Copiar todos os códigos para a área de transferência.
+  - Baixar arquivo `.txt` formatado contendo os códigos e orientações.
+  - Regeneração com invalidação imediata dos códigos anteriores (com confirmação explícita).
 
-## 4. Migrations do Banco de Dados
-- `0004_add_admin_whatsapp_and_otp_to_users_and_companies.sql`: Adiciona campos `admin_whatsapp` (UNIQUE) em `companies`, e `whatsapp` (UNIQUE), `otp_code` e `otp_expires_at` em `users`.
+## 4. Endpoints da API de Autenticação e Códigos
+- `POST /api/auth/otp/send`: Envia OTP de 6 dígitos via Evolution API. Se a instância padrão estiver offline, responde com status 503 e `{ instanceDisconnected: true }`.
+- `POST /api/auth/backup-code/verify`: Valida WhatsApp de acesso admin + código reserva, consome o código e estabelece a sessão segura.
+- `POST /api/painel/empresa/backup-codes`: Regenera a lista de 10 códigos da empresa logada.
+- `POST /api/sa/companies/[id]/backup-codes`: Regenera a lista de 10 códigos de qualquer empresa pelo Super Admin.
 
 ## 3. Banco de Dados e Autenticação
 - Módulo `src/lib/db.ts` gerencia o pool de conexões com MySQL.

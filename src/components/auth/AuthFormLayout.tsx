@@ -23,11 +23,14 @@ import {
   Smartphone,
   KeyRound,
   RefreshCw,
-  CheckCircle2
+  CheckCircle2,
+  Key,
+  HelpCircle
 } from "lucide-react";
 import { AnimatedBackground } from "./AnimatedBackground";
 import { DatabaseStatusIndicator } from "./DatabaseStatusIndicator";
 import { RedisStatusIndicator } from "./RedisStatusIndicator";
+import { WhatsappDefaultStatusIndicator } from "./WhatsappDefaultStatusIndicator";
 import { maskPhone } from "@/lib/validators";
 import { SYSTEM_VERSION } from "@/lib/config";
 
@@ -43,11 +46,14 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   
-  // Painel Empresa Form State (WhatsApp + OTP 6 dígitos)
+  // Painel Empresa Form State (WhatsApp + OTP ou Código Reserva)
   const [whatsapp, setWhatsapp] = useState("");
+  const [authMode, setAuthMode] = useState<"otp" | "backup_code">("otp");
   const [otpStep, setOtpStep] = useState<"whatsapp" | "code">("whatsapp");
   const [otpCode, setOtpCode] = useState("");
+  const [backupCode, setBackupCode] = useState("");
   const [devOtpPreview, setDevOtpPreview] = useState<string | null>(null);
+  const [instanceDisconnectedNotice, setInstanceDisconnectedNotice] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -93,6 +99,7 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
     e.preventDefault();
     setErrorMessage("");
     setSuccessMessage("");
+    setInstanceDisconnectedNotice(false);
     
     const cleanWa = whatsapp.replace(/\D/g, "");
     if (cleanWa.length < 10) {
@@ -112,7 +119,13 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setErrorMessage(data.message || "Não foi possível enviar o código OTP.");
+        if (data.instanceDisconnected) {
+          setInstanceDisconnectedNotice(true);
+          setAuthMode("backup_code");
+          setErrorMessage(data.message || "WhatsApp central desconectado. Use seu código reserva.");
+        } else {
+          setErrorMessage(data.message || "Não foi possível enviar o código OTP.");
+        }
         setIsLoading(false);
         return;
       }
@@ -162,6 +175,55 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
       setErrorMessage("Erro de conexão ao validar o código.");
       setIsLoading(false);
     }
+  };
+
+  // Validar código reserva de emergência e autenticar
+  const handleVerifyBackupCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const cleanWa = whatsapp.replace(/\D/g, "");
+    if (cleanWa.length < 10) {
+      setErrorMessage("Informe o número de WhatsApp cadastrado na empresa.");
+      return;
+    }
+
+    if (!backupCode.trim()) {
+      setErrorMessage("Digite o código reserva (ex: ABCD-1234).");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/backup-code/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ whatsapp, code: backupCode }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setErrorMessage(data.message || "Código reserva inválido.");
+        setIsLoading(false);
+        return;
+      }
+
+      setSuccessMessage(data.message || "Autenticado com sucesso via código reserva!");
+      const targetUrl = data.redirectTo || "/painel";
+      window.location.href = targetUrl;
+    } catch {
+      setErrorMessage("Erro ao autenticar com o código reserva.");
+      setIsLoading(false);
+    }
+  };
+
+  const handleBackupCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.toUpperCase();
+    setBackupCode(val);
+    if (errorMessage) setErrorMessage("");
   };
 
   const handleWhatsappChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -280,6 +342,7 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
             <div className="flex items-center gap-2">
               <DatabaseStatusIndicator />
               <RedisStatusIndicator />
+              <WhatsappDefaultStatusIndicator />
             </div>
             <span className="text-[11px] text-slate-500 font-mono">v{SYSTEM_VERSION}</span>
           </div>
@@ -291,17 +354,64 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
             
             {/* Form Title & Description */}
             <div>
-              <h3 className="text-xl font-bold text-white tracking-tight">
-                {isSaas ? "Acesso Super Admin" : "Acesso à Empresa"}
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white tracking-tight">
+                  {isSaas ? "Acesso Super Admin" : "Acesso à Empresa"}
+                </h3>
+                {!isSaas && (
+                  <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode("otp");
+                        setErrorMessage("");
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                        authMode === "otp"
+                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Via OTP
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode("backup_code");
+                        setErrorMessage("");
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                        authMode === "backup_code"
+                          ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Via Código
+                    </button>
+                  </div>
+                )}
+              </div>
               <p className="text-xs text-slate-400 mt-1">
                 {isSaas 
                   ? "Credenciais restritas de administração SaaS"
-                  : otpStep === "whatsapp" 
-                    ? "Informe o WhatsApp de acesso para receber o código OTP" 
-                    : "Insira o código de 6 dígitos recebido no seu WhatsApp"}
+                  : authMode === "backup_code"
+                    ? "Acesse informando seu WhatsApp e um dos Códigos Reservas da empresa"
+                    : otpStep === "whatsapp" 
+                      ? "Informe o WhatsApp de acesso para receber o código OTP" 
+                      : "Insira o código de 6 dígitos recebido no seu WhatsApp"}
               </p>
             </div>
+
+            {/* Warning if central WhatsApp is disconnected */}
+            {instanceDisconnectedNotice && (
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-amber-300 text-xs animate-in fade-in">
+                <Key className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                <div className="flex-1">
+                  <span className="font-bold block mb-0.5">WhatsApp Central Desconectado</span>
+                  O envio de SMS/WhatsApp OTP está temporariamente indisponível. Utilize um dos seus <strong>Códigos Reservas</strong> para efetuar o login imediatamente.
+                </div>
+              </div>
+            )}
 
             {/* Error Message Alert */}
             {errorMessage && (
@@ -384,7 +494,7 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
             )}
 
             {/* FORM: PAINEL EMPRESA (WhatsApp -> OTP Code) */}
-            {!isSaas && otpStep === "whatsapp" && (
+            {!isSaas && authMode === "otp" && otpStep === "whatsapp" && (
               <form onSubmit={handleRequestOtp} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5">
@@ -402,15 +512,25 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
                       className="w-full pl-10 pr-4 py-3 text-xs rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 font-medium"
                     />
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1.5">
-                    Informe o número cadastrado no sistema para receber o código OTP de 6 dígitos.
-                  </p>
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5">
+                    <span>Informe o número cadastrado no sistema.</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode("backup_code");
+                        setErrorMessage("");
+                      }}
+                      className="text-amber-400 hover:text-amber-300 font-semibold underline underline-offset-2"
+                    >
+                      Usar Código Reserva
+                    </button>
+                  </div>
                 </div>
 
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 hover:shadow-emerald-600/50 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50"
+                  className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 hover:shadow-emerald-600/50 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {isLoading ? (
                     <>
@@ -428,7 +548,7 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
             )}
 
             {/* FORM: PAINEL EMPRESA - DIGITAÇÃO DO CÓDIGO OTP */}
-            {!isSaas && otpStep === "code" && (
+            {!isSaas && authMode === "otp" && otpStep === "code" && (
               <form onSubmit={handleVerifyOtp} className="space-y-4">
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
@@ -449,30 +569,22 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
                       onChange={handleOtpChange}
                       placeholder="000000"
                       maxLength={6}
-                      className="w-full pl-10 pr-4 py-3 text-lg font-black tracking-widest text-center rounded-xl bg-slate-900/90 border border-emerald-500/50 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono"
+                      className="w-full pl-10 pr-4 py-3 text-center text-lg tracking-[0.4em] font-mono font-bold rounded-xl bg-slate-900/90 border border-slate-800 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50"
                     />
                   </div>
-                  <div className="flex items-center justify-between mt-2 text-[11px]">
-                    <span className="text-slate-400">Válido por 10 minutos</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOtpStep("whatsapp");
-                        setOtpCode("");
-                        setDevOtpPreview(null);
-                        setErrorMessage("");
-                      }}
-                      className="text-emerald-400 hover:text-emerald-300 underline"
-                    >
-                      Trocar número
-                    </button>
-                  </div>
+                  {devOtpPreview && (
+                    <div className="mt-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-center">
+                      <span className="text-[11px] text-emerald-400 font-mono">
+                        Código de Teste: <strong>{devOtpPreview}</strong>
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <button
                   type="submit"
                   disabled={isLoading || otpCode.length !== 6}
-                  className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 hover:shadow-emerald-600/50 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50"
+                  className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 hover:shadow-emerald-600/50 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {isLoading ? (
                     <>
@@ -481,11 +593,114 @@ export function AuthFormLayout({ type }: AuthLayoutProps) {
                     </>
                   ) : (
                     <>
-                      <span>Confirmar e Acessar Painel</span>
-                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Entrar no Painel</span>
+                      <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
+
+                <div className="flex items-center justify-between pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOtpStep("whatsapp");
+                      setOtpCode("");
+                      setErrorMessage("");
+                    }}
+                    className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                  >
+                    ← Alterar número
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRequestOtp}
+                    disabled={isLoading}
+                    className="text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
+                  >
+                    Reenviar código
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* FORM: PAINEL EMPRESA - CÓDIGO RESERVA */}
+            {!isSaas && authMode === "backup_code" && (
+              <form onSubmit={handleVerifyBackupCode} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    WhatsApp de Acesso da Empresa
+                  </label>
+                  <div className="relative">
+                    <Smartphone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-400" />
+                    <input
+                      type="text"
+                      required
+                      value={whatsapp}
+                      onChange={handleWhatsappChange}
+                      placeholder="(11) 99999-9999"
+                      maxLength={15}
+                      className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-300">
+                      Código Reserva de Emergência
+                    </label>
+                    <span className="text-[10px] text-amber-400 font-medium">
+                      Ex: ABCD-1234
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <Key className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-400" />
+                    <input
+                      type="text"
+                      required
+                      autoFocus
+                      value={backupCode}
+                      onChange={handleBackupCodeChange}
+                      placeholder="XXXX-XXXX"
+                      maxLength={10}
+                      className="w-full pl-10 pr-4 py-2.5 text-center text-base tracking-widest font-mono font-bold rounded-xl bg-slate-900/90 border border-slate-800 text-amber-300 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 uppercase"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1.5 leading-tight">
+                    Utilize qualquer um dos códigos gerados no cadastro da sua empresa. Os códigos não expiram e podem ser reutilizados sempre que necessário.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading || !backupCode.trim()}
+                  className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-slate-950 text-xs font-extrabold shadow-lg shadow-amber-600/30 hover:shadow-amber-600/50 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                      <span>Validando código reserva...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Entrar com Código Reserva</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+
+                <div className="flex items-center justify-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode("otp");
+                      setErrorMessage("");
+                    }}
+                    className="text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
+                  >
+                    ← Voltar para login via WhatsApp (OTP)
+                  </button>
+                </div>
               </form>
             )}
 

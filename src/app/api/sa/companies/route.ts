@@ -5,6 +5,7 @@ import { requireSaPermission } from "@/lib/server-permissions";
 import { createEvolutionInstance } from "@/lib/evolution";
 import crypto from "crypto";
 import { logAudit, getClientIpAndAgent } from "@/lib/audit";
+import { generateBackupCodes } from "@/lib/backup-codes";
 
 export const dynamic = "force-dynamic";
 
@@ -195,12 +196,13 @@ export async function POST(request: Request) {
     }
 
     // Inserir empresa
+    const initialBackupCodes = generateBackupCodes(10);
     const [result] = await pool.query<ResultSetHeader>(
       `INSERT INTO companies (
-        name, trade_name, document, email, whatsapp, admin_whatsapp, plan, status, 
+        name, trade_name, document, email, whatsapp, admin_whatsapp, backup_codes, plan, status, 
         max_instances, max_messages_day, address_zipcode, address_street,
         address_number, address_complement, address_neighborhood, address_city, address_state
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name.trim(),
         trade_name?.trim() || null,
@@ -208,6 +210,7 @@ export async function POST(request: Request) {
         email?.trim() || null,
         whatsapp?.trim() || null,
         admin_whatsapp?.trim() || null,
+        JSON.stringify(initialBackupCodes),
         plan,
         status,
         Number(max_instances) || 5,

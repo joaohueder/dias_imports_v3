@@ -58,7 +58,30 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ success: true, company: rows[0] });
+    const companyData = rows[0];
+    let backupCodes = [];
+    if (companyData.backup_codes) {
+      try {
+        backupCodes = typeof companyData.backup_codes === "string" 
+          ? JSON.parse(companyData.backup_codes) 
+          : companyData.backup_codes;
+      } catch {}
+    }
+
+    // Se ainda não tiver códigos reservas gerados, gera automaticamente
+    if (!Array.isArray(backupCodes) || backupCodes.length === 0) {
+      const { generateBackupCodes } = await import("@/lib/backup-codes");
+      backupCodes = generateBackupCodes(10);
+      await pool.query(
+        "UPDATE companies SET backup_codes = ? WHERE id = ?",
+        [JSON.stringify(backupCodes), id]
+      );
+      companyData.backup_codes = backupCodes;
+    } else {
+      companyData.backup_codes = backupCodes;
+    }
+
+    return NextResponse.json({ success: true, company: companyData });
   } catch (error: unknown) {
     console.error("Erro na rota /api/sa/companies/[id]:", error);
     const message = error instanceof Error ? error.message : "Erro ao carregar empresa";

@@ -2,9 +2,9 @@
   "id": 1,
   "status": "healthy",
   "db_status": "online",
-  "db_latency_ms": 128,
+  "db_latency_ms": 126,
   "redis_status": "online",
-  "redis_latency_ms": 387,
+  "redis_latency_ms": 384,
   "pm2_status": "online",
   "evolution_status": "online",
   "whatsapp_status": "connected",
@@ -12,7 +12,7 @@
   "whatsapp_profile": "Radar Carros",
   "system_cpu_usage": "0.1%",
   "system_total_mem_mb": 32685,
-  "system_used_mem_mb": 16117,
-  "system_uptime_seconds": 686505.937,
-  "updated_at": "2026-08-29T15:20:07.190Z"
+  "system_used_mem_mb": 15139,
+  "system_uptime_seconds": 864785.5,
+  "updated_at": "2026-08-31T16:50:19.461Z"
 }

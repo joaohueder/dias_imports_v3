@@ -42,6 +42,7 @@ import {
   ExternalLink,
   Send,
   Eye,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useFeedbackModal } from "@/components/ui/FeedbackModal";
@@ -86,6 +87,28 @@ interface PlanOption {
   billing_cycle: string;
 }
 
+interface CompanyData {
+  id: number;
+  name: string;
+  trade_name?: string | null;
+  document?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  admin_whatsapp?: string | null;
+  backup_codes?: { code: string; used: boolean; used_at?: string; created_at: string }[] | string | null;
+  plan?: string | null;
+  status?: string | null;
+  current_plan_name?: string | null;
+  address_zipcode?: string | null;
+  address_street?: string | null;
+  address_number?: string | null;
+  address_complement?: string | null;
+  address_neighborhood?: string | null;
+  address_city?: string | null;
+  address_state?: string | null;
+}
+
 interface Instance {
   id: number;
   company_id: number;
@@ -105,6 +128,15 @@ interface Instance {
   last_activity_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface BackupCodeItem {
+  code: string;
+  usage_count?: number;
+  last_used_at?: string | null;
+  used?: boolean;
+  used_at?: string | null;
+  created_at: string;
 }
 
 // Mapeamento visual e amigável em português dos status de assinatura
@@ -204,6 +236,10 @@ function CompanyFormContent({ companyIdProp }: { companyIdProp?: string }) {
   const [testMessage, setTestMessage] = useState("");
   const [isSendingTest, setIsSendingTest] = useState(false);
 
+  // Backup Codes (Códigos de Reserva)
+  const [backupCodes, setBackupCodes] = useState<BackupCodeItem[]>([]);
+  const [isRegeneratingBackupCodes, setIsRegeneratingBackupCodes] = useState(false);
+
   // Controle de Abas (suporte a query param ?tab=subscription | ?tab=instances)
   const getInitialTab = () => {
     const t = searchParams?.get("tab");
@@ -255,6 +291,12 @@ function CompanyFormContent({ companyIdProp }: { companyIdProp?: string }) {
 
         if (result.success && result.company) {
           const c = result.company;
+          let codes: BackupCodeItem[] = [];
+          if (c.backup_codes) {
+            codes = typeof c.backup_codes === "string" ? JSON.parse(c.backup_codes) : c.backup_codes;
+          }
+          setBackupCodes(Array.isArray(codes) ? codes : []);
+
           const loaded = {
             name: c.name || "",
             trade_name: c.trade_name || "",
@@ -920,6 +962,70 @@ function CompanyFormContent({ companyIdProp }: { companyIdProp?: string }) {
     return () => clearInterval(interval);
   }, [companyId, activeTab, authUser?.id]);
 
+  const handleRegenerateBackupCodes = async () => {
+    if (!companyId) return;
+    if (!confirm("Atenção: Ao gerar novos códigos reservas, os códigos anteriores desta empresa serão invalidados imediatamente. Deseja continuar?")) {
+      return;
+    }
+    try {
+      setIsRegeneratingBackupCodes(true);
+      const res = await fetch(`/api/sa/companies/${companyId}/backup-codes`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.backup_codes) {
+        setBackupCodes(data.backup_codes);
+        toast.success("Novos códigos reservas gerados com sucesso para a empresa!");
+      } else {
+        toast.error(data.error || "Erro ao regenerar códigos reservas.");
+      }
+    } catch {
+      toast.error("Erro de conexão ao regenerar códigos.");
+    } finally {
+      setIsRegeneratingBackupCodes(false);
+    }
+  };
+
+  const handleCopyBackupCodes = () => {
+    if (!backupCodes.length) return;
+    const text = backupCodes
+      .map((c, i) => `${i + 1}. ${c.code} ${c.usage_count ? `(${c.usage_count}x acessado)` : "(DISPONÍVEL)"}`)
+      .join("\n");
+    navigator.clipboard.writeText(`CÓDIGOS RESERVAS DE ACESSO - ${formData.name || "EMPRESA"}\n\n${text}\n\nGuarde estes códigos em local seguro.`);
+    toast.success("Códigos reservas copiados!");
+  };
+
+  const handleDownloadBackupCodes = () => {
+    if (!backupCodes.length) return;
+    const text = backupCodes
+      .map((c, i) => `${i + 1}. ${c.code} ${c.usage_count ? `(Utilizado ${c.usage_count} vez(es) - Último: ${c.last_used_at || c.used_at})` : "(DISPONÍVEL)"}`)
+      .join("\n");
+    const content = `=====================================================
+CÓDIGOS RESERVAS DE ACESSO - EMPRESA: ${formData.name || "Empresa"}
+ID Empresa: #${companyId}
+Data de Emissão: ${new Date().toLocaleString("pt-BR")}
+=====================================================
+
+INFORMAÇÕES DE USO:
+- Estes códigos NÃO possuem prazo de validade.
+- Podem ser reutilizados mais de uma vez sempre que necessário.
+- Use estes códigos para acessar o painel caso a instância WhatsApp esteja indisponível.
+
+${text}
+
+=====================================================
+Confidencial - Dias Imports Multi-Tenancy SaaS
+=====================================================`;
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `codigos-reserva-empresa-${companyId}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Arquivo baixado com sucesso!");
+  };
+
   // Separação de Assinatura Ativa vs Histórico/Vencidas
   // Apenas assinaturas ativas são consideradas vigentes
   const activeSubscription = subscriptions.find(
@@ -1420,6 +1526,93 @@ function CompanyFormContent({ companyIdProp }: { companyIdProp?: string }) {
               </div>
             </div>
           </div>
+
+          {/* Seção 3: Códigos Reservas de Emergência (apenas no modo edição) */}
+          {isEditing && (
+            <div className="rounded-2xl bg-[#090f1d]/90 border border-slate-800/80 p-6 shadow-xl shadow-black/20 space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                    <Key className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                      Códigos Reservas de Acesso (Emergência)
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-semibold">
+                        10 Códigos
+                      </span>
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Permite acesso da empresa mesmo que a instância padrão do WhatsApp esteja fora do ar.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyBackupCodes}
+                    className="px-3 py-1.5 text-xs font-medium rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Copiar lista de códigos"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-slate-400" />
+                    Copiar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadBackupCodes}
+                    className="px-3 py-1.5 text-xs font-medium rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Baixar arquivo TXT"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-400" />
+                    Baixar TXT
+                  </button>
+                  {can("companies", "edit") && (
+                    <button
+                      type="button"
+                      onClick={handleRegenerateBackupCodes}
+                      disabled={isRegeneratingBackupCodes}
+                      className="px-3 py-1.5 text-xs font-medium rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition-colors flex items-center gap-1.5 cursor-pointer"
+                      title="Gerar novos códigos"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isRegeneratingBackupCodes ? "animate-spin" : ""}`} />
+                      {isRegeneratingBackupCodes ? "Gerando..." : "Regenerar Códigos"}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                {backupCodes.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 rounded-xl border text-center transition-all bg-slate-900/90 border-slate-800 hover:border-slate-700 shadow-sm"
+                  >
+                    <div className="text-[10px] text-slate-500 mb-1 font-semibold flex items-center justify-center gap-1">
+                      <span>#{idx + 1}</span>
+                      {item.usage_count && item.usage_count > 0 ? (
+                        <span className="text-amber-400 font-bold text-[9px] uppercase">
+                          {item.usage_count}x usado
+                        </span>
+                      ) : (
+                        <span className="text-emerald-400 font-bold text-[9px] uppercase">Disponível</span>
+                      )}
+                    </div>
+                    <span className="font-mono font-bold text-xs tracking-wider block text-amber-300">
+                      {item.code}
+                    </span>
+                    {item.last_used_at || item.used_at ? (
+                      <span className="text-[9px] text-slate-500 block mt-1 truncate" title={`Último uso: ${item.last_used_at || item.used_at}`}>
+                        {new Date(item.last_used_at || item.used_at || "").toLocaleDateString("pt-BR")}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-slate-600 block mt-1">Nunca usado</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </form>
       )}
 

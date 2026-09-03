@@ -54,6 +54,9 @@ export async function initAuthDatabase(): Promise<void> {
   try {
     await db.query(`ALTER TABLE subscriptions ADD COLUMN plan_snapshot_max_leads INT NULL DEFAULT 0 AFTER plan_snapshot_max_views`);
   } catch {}
+  try {
+    await db.query(`ALTER TABLE companies ADD COLUMN backup_codes JSON NULL AFTER admin_whatsapp`);
+  } catch {}
 
   // Cria tabela de empresas se não existir
   await db.query(`
@@ -66,6 +69,7 @@ export async function initAuthDatabase(): Promise<void> {
       phone VARCHAR(50) NULL,
       whatsapp VARCHAR(50) NULL,
       admin_whatsapp VARCHAR(50) NULL UNIQUE,
+      backup_codes JSON NULL,
       plan VARCHAR(50) NOT NULL DEFAULT 'Pro',
       status ENUM('active', 'inactive', 'suspended') NOT NULL DEFAULT 'active',
       max_instances INT NOT NULL DEFAULT 5,
